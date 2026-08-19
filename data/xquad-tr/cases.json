@@ -1,0 +1,1204 @@
+{
+ "cases": [
+  {
+   "case_id": "56bf36b93aeaaa14008c9562",
+   "layer": "overlap",
+   "query": "Broncos ve Steelers arasındaki oyunun son skoru neydi?",
+   "relevant_document_ids": [
+    "xquad::a4fc6a20569c"
+   ]
+  },
+  {
+   "case_id": "56d7018a0d65d214001982c2",
+   "layer": "overlap",
+   "query": "Bölge turunda Broncos'u kim yenmiştir?",
+   "relevant_document_ids": [
+    "xquad::a4fc6a20569c"
+   ]
+  },
+  {
+   "case_id": "56d7253b0d65d214001983d4",
+   "layer": "overlap",
+   "query": "Super Bowl 50'de Ulusal Marş'ı kim yapmıştır?",
+   "relevant_document_ids": [
+    "xquad::94f60e3ec5b6"
+   ]
+  },
+  {
+   "case_id": "56d726b60d65d214001983ee",
+   "layer": "overlap",
+   "query": "Denver skoru 24-10'a getirdiğinde oyunda ne kadar süre kalmıştı?",
+   "relevant_document_ids": [
+    "xquad::ae726042d746"
+   ]
+  },
+  {
+   "case_id": "56de0daecffd8e1900b4b596",
+   "layer": "overlap",
+   "query": "Melfi Kontu kimdi?",
+   "relevant_document_ids": [
+    "xquad::a00bdbd1df3e"
+   ]
+  },
+  {
+   "case_id": "56dfb5777aa994140058e023",
+   "layer": "overlap",
+   "query": "Tesla Elektrik Işığı ve İmalat ne yapmıştır?",
+   "relevant_document_ids": [
+    "xquad::3ce6d1d755ca"
+   ]
+  },
+  {
+   "case_id": "56dfb5777aa994140058e024",
+   "layer": "overlap",
+   "query": "Tesla şirketini başlattığında ilk olarak ne yapmıştır?",
+   "relevant_document_ids": [
+    "xquad::3ce6d1d755ca"
+   ]
+  },
+  {
+   "case_id": "56e0bb9f7aa994140058e6cc",
+   "layer": "overlap",
+   "query": "Tesla hangi yıl ölmüştür?",
+   "relevant_document_ids": [
+    "xquad::8e9297e4b08d"
+   ]
+  },
+  {
+   "case_id": "56e0fc3f7aa994140058e87a",
+   "layer": "overlap",
+   "query": "Tesla'nın patentleri ne zaman geri verilmiştir?",
+   "relevant_document_ids": [
+    "xquad::9092ecec22b6"
+   ]
+  },
+  {
+   "case_id": "56e1254ae3433e1400422c66",
+   "layer": "overlap",
+   "query": "1937 yılında hangi makale yayınlanmıştır?",
+   "relevant_document_ids": [
+    "xquad::e07644e5f626"
+   ]
+  },
+  {
+   "case_id": "56e16182e3433e1400422e29",
+   "layer": "overlap",
+   "query": "Hesaplamalı problemler hangi ana niteliklere göre hesaplamalı karmaşıklık teorisi kullanılarak sınıflandırılır?",
+   "relevant_document_ids": [
+    "xquad::e93450d075ea"
+   ]
+  },
+  {
+   "case_id": "56e181d9e3433e1400422fa0",
+   "layer": "overlap",
+   "query": "Hesaplamalı bir problemde, bir alfabe üzerindeki bir dizi olarak ne tanımlanabilir?",
+   "relevant_document_ids": [
+    "xquad::9494df1b93f1"
+   ]
+  },
+  {
+   "case_id": "56e1ee4de3433e1400423211",
+   "layer": "overlap",
+   "query": "Karmaşıklık sınıflarının şüpheli eşitsizliğini örneklemek için kullanılabilecek bir ifade nedir?",
+   "relevant_document_ids": [
+    "xquad::e46e81189f34"
+   ]
+  },
+  {
+   "case_id": "56e7788200c9c71400d77180",
+   "layer": "overlap",
+   "query": "Galler'deki öğretmenler hangi gruba kaydolabilir?",
+   "relevant_document_ids": [
+    "xquad::e0a5e78cf373"
+   ]
+  },
+  {
+   "case_id": "56e7788200c9c71400d77181",
+   "layer": "overlap",
+   "query": "Galler'deki öğretmenlerin ortalama yaşında nasıl bir değişiklik olmaktadır?",
+   "relevant_document_ids": [
+    "xquad::e0a5e78cf373"
+   ]
+  },
+  {
+   "case_id": "56e77cee00c9c71400d771aa",
+   "layer": "overlap",
+   "query": "Gurular kimleri kontrol eder?",
+   "relevant_document_ids": [
+    "xquad::a7953f7313ff"
+   ]
+  },
+  {
+   "case_id": "56e77da237bdd419002c403d",
+   "layer": "overlap",
+   "query": "Bodhisattva yemininin adı nedir?",
+   "relevant_document_ids": [
+    "xquad::99c5461502c7"
+   ]
+  },
+  {
+   "case_id": "56e77da237bdd419002c403f",
+   "layer": "overlap",
+   "query": "Lama'nın yeniden doğmaya azmetmesine ne yardımcı olmuştur?",
+   "relevant_document_ids": [
+    "xquad::99c5461502c7"
+   ]
+  },
+  {
+   "case_id": "56f8094aa6d7ea1400e17393",
+   "layer": "overlap",
+   "query": "Luther'in kariyerinin hangi kısmı en üretken zamanlarından biriydi?",
+   "relevant_document_ids": [
+    "xquad::0d309a503c56"
+   ]
+  },
+  {
+   "case_id": "5705f7c875f01819005e77e0",
+   "layer": "overlap",
+   "query": "Güney Kaliforniya'nın kentsel bölgesinin içinde ne tür bir bölge bulunabilir?",
+   "relevant_document_ids": [
+    "xquad::d3f4e6dfbff8"
+   ]
+  },
+  {
+   "case_id": "5706074552bb8914006897d5",
+   "layer": "overlap",
+   "query": "Burada kaç adet genişletilmiş metropol alanı vardır?",
+   "relevant_document_ids": [
+    "xquad::c01dd7aac595"
+   ]
+  },
+  {
+   "case_id": "5706143575f01819005e7950",
+   "layer": "overlap",
+   "query": "Los Angeles Rams, hangi türdeki bir spor takımının örneğidir?",
+   "relevant_document_ids": [
+    "xquad::48755c1b21cd"
+   ]
+  },
+  {
+   "case_id": "5706143575f01819005e7954",
+   "layer": "overlap",
+   "query": "Güney Kaliforniya'ya ait olan tek MLS takımı nedir?",
+   "relevant_document_ids": [
+    "xquad::48755c1b21cd"
+   ]
+  },
+  {
+   "case_id": "570966e0200fba1400367f50",
+   "layer": "overlap",
+   "query": "Sky Movies ve Sky Box ayrıca hangi isteğe bağlı film müziklerini içerir?",
+   "relevant_document_ids": [
+    "xquad::b4d91f81ed7f"
+   ]
+  },
+  {
+   "case_id": "57096b66200fba1400367fab",
+   "layer": "overlap",
+   "query": "BSkyB'nin spor portföyü neleri içerir?",
+   "relevant_document_ids": [
+    "xquad::d9e5c01b4496"
+   ]
+  },
+  {
+   "case_id": "570d2f5bfed7b91900d45cd1",
+   "layer": "overlap",
+   "query": "Hangi grup Victoria anayasasını değiştirebilir?",
+   "relevant_document_ids": [
+    "xquad::c347396c3809"
+   ]
+  },
+  {
+   "case_id": "570d4a6bfed7b91900d45e13",
+   "layer": "overlap",
+   "query": "Yeni Güney Galler kolonisi ne zaman kurulmuştur?",
+   "relevant_document_ids": [
+    "xquad::05b0784f68b0"
+   ]
+  },
+  {
+   "case_id": "5710eca0a58dae1900cd6b3b",
+   "layer": "overlap",
+   "query": "Bu İngiliz kolonisinin hangi bölgesinde Fransız Protestanlara toprak hibe edildi?",
+   "relevant_document_ids": [
+    "xquad::cffec7dde0a5"
+   ]
+  },
+  {
+   "case_id": "5710eca0a58dae1900cd6b3c",
+   "layer": "overlap",
+   "query": "Fransız Protestanları vardıklarında onlara fiilen hangi kasaba verildi?",
+   "relevant_document_ids": [
+    "xquad::cffec7dde0a5"
+   ]
+  },
+  {
+   "case_id": "57111b95a58dae1900cd6c52",
+   "layer": "overlap",
+   "query": "Hangi Alman general ve savaş pilotu Fransız Protestan soyundandı?",
+   "relevant_document_ids": [
+    "xquad::a0897678ede7"
+   ]
+  },
+  {
+   "case_id": "57111b95a58dae1900cd6c53",
+   "layer": "overlap",
+   "query": "Doğu Almanyanın son Başbakanı kimdi?",
+   "relevant_document_ids": [
+    "xquad::a0897678ede7"
+   ]
+  },
+  {
+   "case_id": "571144d1a58dae1900cd6d6e",
+   "layer": "overlap",
+   "query": "Buhar motorunda kaynamış su için alışılagelmiş ısı kaynağı nedir?",
+   "relevant_document_ids": [
+    "xquad::92147510df38"
+   ]
+  },
+  {
+   "case_id": "571144d1a58dae1900cd6d6f",
+   "layer": "overlap",
+   "query": "Yanma odasının dışında, yanıcı maddelerin motorda yakıldığı alanın diğer adı nedir?",
+   "relevant_document_ids": [
+    "xquad::92147510df38"
+   ]
+  },
+  {
+   "case_id": "571144d1a58dae1900cd6d71",
+   "layer": "overlap",
+   "query": "Oyuncak buhar motorlarında hangi tip ısıtma elemanı kullanılır?",
+   "relevant_document_ids": [
+    "xquad::92147510df38"
+   ]
+  },
+  {
+   "case_id": "57114667a58dae1900cd6d81",
+   "layer": "overlap",
+   "query": "Buhar motoru göstergesinin kaydedilen en eski kullanımı hangi yıldaydı?",
+   "relevant_document_ids": [
+    "xquad::a980bd395df7"
+   ]
+  },
+  {
+   "case_id": "57114667a58dae1900cd6d84",
+   "layer": "overlap",
+   "query": "Charles Porter buhar motoru göstergesi nerede sergilendi?",
+   "relevant_document_ids": [
+    "xquad::a980bd395df7"
+   ]
+  },
+  {
+   "case_id": "57114e8d50c2381900b54a5d",
+   "layer": "overlap",
+   "query": "565 °C sürünme sınırı nedir?",
+   "relevant_document_ids": [
+    "xquad::c39fcaf3efe3"
+   ]
+  },
+  {
+   "case_id": "57115bf350c2381900b54a95",
+   "layer": "overlap",
+   "query": "Energiprojekt AB motorunda kaç silindir vardır?",
+   "relevant_document_ids": [
+    "xquad::a4feefaeb726"
+   ]
+  },
+  {
+   "case_id": "57115bf350c2381900b54a97",
+   "layer": "overlap",
+   "query": "Energiprojekt AB motorunun eriştiği yüksek basınçlı motor verimi yüzde kaçtır?",
+   "relevant_document_ids": [
+    "xquad::a4feefaeb726"
+   ]
+  },
+  {
+   "case_id": "57115ff82419e314009555c4",
+   "layer": "overlap",
+   "query": "Bir buhar türbininde, rotorlar neye monte edilir?",
+   "relevant_document_ids": [
+    "xquad::66caf2afcf83"
+   ]
+  },
+  {
+   "case_id": "571c8539dd7acb1400e4c0e4",
+   "layer": "overlap",
+   "query": "Oksijeni ilk keşfedenin Priestley olduğu iddiasının nedeni nedir?",
+   "relevant_document_ids": [
+    "xquad::7ab70c54a208"
+   ]
+  },
+  {
+   "case_id": "571cb27fdd7acb1400e4c135",
+   "layer": "overlap",
+   "query": "Deniz hayvanları, daha soğuk iklim koşullarında hangi oksijen formunu yüksek miktarlarda elde eder?",
+   "relevant_document_ids": [
+    "xquad::e12671dc577f"
+   ]
+  },
+  {
+   "case_id": "571cb27fdd7acb1400e4c136",
+   "layer": "overlap",
+   "query": "Ne tür bir iklim sırasında deniz suyu içinde oksijen 18 daha yüksek seviyelerdedir?",
+   "relevant_document_ids": [
+    "xquad::e12671dc577f"
+   ]
+  },
+  {
+   "case_id": "571cd3b55efbb31900334e05",
+   "layer": "overlap",
+   "query": "Gaz kangrenine neden olan hangi patojen için oksijen zehirlidir?",
+   "relevant_document_ids": [
+    "xquad::170df79ece83"
+   ]
+  },
+  {
+   "case_id": "5725c337271a42140099d163",
+   "layer": "overlap",
+   "query": "Taraklıların kaç türü teyit edilmiştir?",
+   "relevant_document_ids": [
+    "xquad::aa3d4306d251"
+   ]
+  },
+  {
+   "case_id": "5725d79e89a1e219009abf91",
+   "layer": "overlap",
+   "query": "AS-278 ikili görevinde astronotlar ne giyiyordu?",
+   "relevant_document_ids": [
+    "xquad::6c91afb257e9"
+   ]
+  },
+  {
+   "case_id": "5725f00938643c19005aced7",
+   "layer": "overlap",
+   "query": "Kearney Bulvarı adını kimden almıştır?",
+   "relevant_document_ids": [
+    "xquad::163b4737ece9"
+   ]
+  },
+  {
+   "case_id": "5725f39638643c19005acefa",
+   "layer": "overlap",
+   "query": "Orijinal kasetleri geri yüklemek için hangi şirket görev aldı?",
+   "relevant_document_ids": [
+    "xquad::5e1c7e6ed1f6"
+   ]
+  },
+  {
+   "case_id": "5725f8f5ec44d21400f3d7b2",
+   "layer": "overlap",
+   "query": "Kocanın bulunmadığı kadın aile reislerinin yüzdesi kaçtır?",
+   "relevant_document_ids": [
+    "xquad::432b31429316"
+   ]
+  },
+  {
+   "case_id": "5726241189a1e219009ac2e2",
+   "layer": "overlap",
+   "query": "Yeni alanların önemli miktarda petrol üretimine sahip olması ne kadar sürer?",
+   "relevant_document_ids": [
+    "xquad::c2535be40225"
+   ]
+  },
+  {
+   "case_id": "57263ea0271a42140099d7c3",
+   "layer": "overlap",
+   "query": "DECnet nedir?",
+   "relevant_document_ids": [
+    "xquad::9bcacde2223d"
+   ]
+  },
+  {
+   "case_id": "5726472bdd62a815002e8045",
+   "layer": "overlap",
+   "query": "Internet2 kimle ortaklığa girmiştir?",
+   "relevant_document_ids": [
+    "xquad::beb54cc1526d"
+   ]
+  },
+  {
+   "case_id": "57264f18f1498d1400e8dbb0",
+   "layer": "overlap",
+   "query": "Y. pestis  soyları veba hakkında neyi öne sürmektedir?",
+   "relevant_document_ids": [
+    "xquad::78418a619ebc"
+   ]
+  },
+  {
+   "case_id": "572650325951b619008f6fab",
+   "layer": "overlap",
+   "query": "Kulağa iyi gelen ancak başarı şansları zayıf olan politikaları kimler destekledi?",
+   "relevant_document_ids": [
+    "xquad::534a35a0f161"
+   ]
+  },
+  {
+   "case_id": "572651f9f1498d1400e8dbee",
+   "layer": "overlap",
+   "query": "Hangi iki yönetim organının yasama veto hakkı vardır?",
+   "relevant_document_ids": [
+    "xquad::6c260b68b173"
+   ]
+  },
+  {
+   "case_id": "5726534d708984140094c271",
+   "layer": "overlap",
+   "query": "İngiltere Halk Sağlığı kaç tane ceset çıkarmıştır?",
+   "relevant_document_ids": [
+    "xquad::b75e630126b1"
+   ]
+  },
+  {
+   "case_id": "57265642f1498d1400e8dc6c",
+   "layer": "overlap",
+   "query": "En son veba salgını ortaya çıkışı ne zamandı?",
+   "relevant_document_ids": [
+    "xquad::fc8d8a0f0d2e"
+   ]
+  },
+  {
+   "case_id": "572659535951b619008f7040",
+   "layer": "overlap",
+   "query": "Alıcılar küçük boyuttaki kompaktlardan yakınınca, Toyota'nın sunduğu daha büyük arabalardan birini belirtin?",
+   "relevant_document_ids": [
+    "xquad::183f13597b0e"
+   ]
+  },
+  {
+   "case_id": "57265e455951b619008f70bc",
+   "layer": "overlap",
+   "query": "İtalyan Anayasa Mahkemesi'nin öne sürdüğü ve Bay Kosta'nın ENEL'e karşı iddiasını kaybetmesine neden olan gerekçe nedir?",
+   "relevant_document_ids": [
+    "xquad::7ff480a14156"
+   ]
+  },
+  {
+   "case_id": "5726660d5951b619008f71b4",
+   "layer": "overlap",
+   "query": "Kimin duvarında Newcastle çevresindeki yerlerden bugün bile görünen parçalar bulunmaktadır?",
+   "relevant_document_ids": [
+    "xquad::e9ab6b4381bf"
+   ]
+  },
+  {
+   "case_id": "572671e55951b619008f72d7",
+   "layer": "overlap",
+   "query": "Grainger Çarşısı hangi önceki çarşının yerini almıştır?",
+   "relevant_document_ids": [
+    "xquad::afbbeaa64229"
+   ]
+  },
+  {
+   "case_id": "572671e55951b619008f72db",
+   "layer": "overlap",
+   "query": "1954 yılında Grainger Çarşısı mimarisini 1. derece olarak kim listelemiştir?",
+   "relevant_document_ids": [
+    "xquad::afbbeaa64229"
+   ]
+  },
+  {
+   "case_id": "572683f95951b619008f7525",
+   "layer": "overlap",
+   "query": "Fielding H. Garrison, jeoloji biliminin nereye kadar takip edilebileceğine inanıyor?",
+   "relevant_document_ids": [
+    "xquad::a809e13fe924"
+   ]
+  },
+  {
+   "case_id": "5726847f708984140094c8af",
+   "layer": "overlap",
+   "query": "Newcastle asıllı Andy Taylor'ın daha önceki baş gitaristi olduğu grup hangisidir?",
+   "relevant_document_ids": [
+    "xquad::7c231930798a"
+   ]
+  },
+  {
+   "case_id": "57268a8fdd62a815002e88d0",
+   "layer": "overlap",
+   "query": "Newcastle şehir merkezi boyunca ne tür tüneller inşa ediliyor?",
+   "relevant_document_ids": [
+    "xquad::f83613621ba9"
+   ]
+  },
+  {
+   "case_id": "57268a8fdd62a815002e88d1",
+   "layer": "overlap",
+   "query": "Kraliçe II. Elizabeth 1981'de Newcastle'da ne açtı?",
+   "relevant_document_ids": [
+    "xquad::f83613621ba9"
+   ]
+  },
+  {
+   "case_id": "57268e2bf1498d1400e8e3b0",
+   "layer": "overlap",
+   "query": "Sonunda AB'yi oluşturan birincil Antlaşmalar için ihtiyaca sebep olan neydi?",
+   "relevant_document_ids": [
+    "xquad::c3c950f2616f"
+   ]
+  },
+  {
+   "case_id": "5726a299dd62a815002e8ba0",
+   "layer": "overlap",
+   "query": "Avrupa İnsan Hakları Sözleşmesi ne zaman imzalanmıştır?",
+   "relevant_document_ids": [
+    "xquad::c1f8baaccd12"
+   ]
+  },
+  {
+   "case_id": "5726da89dd62a815002e92b6",
+   "layer": "overlap",
+   "query": "Bir eczane teknisyeninin ne tür sorumlulukları olabilir?",
+   "relevant_document_ids": [
+    "xquad::72bbabffc4fa"
+   ]
+  },
+  {
+   "case_id": "5726ddf6f1498d1400e8ee05",
+   "layer": "overlap",
+   "query": "Kimyasal bileşiklerin ilaç olarak kullanılmasını teşvik etmede kim etkili oldu?",
+   "relevant_document_ids": [
+    "xquad::3364f2bab7fa"
+   ]
+  },
+  {
+   "case_id": "5726ddf6f1498d1400e8ee06",
+   "layer": "overlap",
+   "query": "Liber Servitoris adlı eseri kim yazmıştır?",
+   "relevant_document_ids": [
+    "xquad::3364f2bab7fa"
+   ]
+  },
+  {
+   "case_id": "5726eb8bf1498d1400e8efe4",
+   "layer": "overlap",
+   "query": "Bağışıklık yetmezliği nelere sebep olur?",
+   "relevant_document_ids": [
+    "xquad::23e5e299746e"
+   ]
+  },
+  {
+   "case_id": "5726f1ec708984140094d6ac",
+   "layer": "overlap",
+   "query": "Horniman Müzesi'ne yaklaşık kaç müzik enstrümanı ödünç verilmiştir?",
+   "relevant_document_ids": [
+    "xquad::d743c2909844"
+   ]
+  },
+  {
+   "case_id": "5726f48df1498d1400e8f0da",
+   "layer": "overlap",
+   "query": "Eczacılar, çoğu yetki alanlarında nasıl düzenlenir?",
+   "relevant_document_ids": [
+    "xquad::c459bb82b29e"
+   ]
+  },
+  {
+   "case_id": "57273dccdd62a815002e99fd",
+   "layer": "overlap",
+   "query": "Song hanedanıyla olan mücadele hangi yıl sona erdi?",
+   "relevant_document_ids": [
+    "xquad::27226d2b3f46"
+   ]
+  },
+  {
+   "case_id": "57273f27dd62a815002e9a0b",
+   "layer": "overlap",
+   "query": "Neler için başka kategoriler vardır?",
+   "relevant_document_ids": [
+    "xquad::0163546179a1"
+   ]
+  },
+  {
+   "case_id": "57273f27dd62a815002e9a0c",
+   "layer": "overlap",
+   "query": "İnşaat şirketleri için sınıflandırma sistemine sahip olan nedir?",
+   "relevant_document_ids": [
+    "xquad::0163546179a1"
+   ]
+  },
+  {
+   "case_id": "57274e0d708984140094dbe5",
+   "layer": "overlap",
+   "query": "Tasarımdaki modern eğilim neyin birleştirilmesine doğrudur?",
+   "relevant_document_ids": [
+    "xquad::d48379ef6beb"
+   ]
+  },
+  {
+   "case_id": "572754cd5951b619008f8864",
+   "layer": "overlap",
+   "query": "Hülagü Han’ın Orta Doğu’daki ilerlemesini kim durdurdu?",
+   "relevant_document_ids": [
+    "xquad::eb56dca7de69"
+   ]
+  },
+  {
+   "case_id": "572757bef1498d1400e8f692",
+   "layer": "overlap",
+   "query": "Amerika Birleşik Devletleri'nin hangi bölgesinde birçok öğrenci ırk ayrımının kaldırılması döneminde Hıristiyan akademilere geçti?",
+   "relevant_document_ids": [
+    "xquad::35b31322cb24"
+   ]
+  },
+  {
+   "case_id": "57276166dd62a815002e9bd9",
+   "layer": "overlap",
+   "query": "Aaron Spelling'in hangi drama dizisi 80'lerde ABC'de ilk defa gösterime girmiştir?",
+   "relevant_document_ids": [
+    "xquad::28e582f103dd"
+   ]
+  },
+  {
+   "case_id": "5727aec03acd2414000de991",
+   "layer": "morphology",
+   "query": "Üniversitenin bulunduğu büyük ABD şehri nedir?",
+   "relevant_document_ids": [
+    "xquad::4f22d1cfd4c0"
+   ]
+  },
+  {
+   "case_id": "5727c94bff5b5019007d954e",
+   "layer": "overlap",
+   "query": "Konsolidasyon hangi yıl Jacksonville'in Duval Vilayetinin bir parçası olmasına neden oldu?",
+   "relevant_document_ids": [
+    "xquad::dd9e4f3dc944"
+   ]
+  },
+  {
+   "case_id": "5727cc15ff5b5019007d9577",
+   "layer": "overlap",
+   "query": "Charles Nehri kampüsündeki bazı bölümlerine katılan köprünün adı nedir?",
+   "relevant_document_ids": [
+    "xquad::8285b24e69af"
+   ]
+  },
+  {
+   "case_id": "5727d1c93acd2414000ded3f",
+   "layer": "overlap",
+   "query": "2019 sınıfı için başvuru kabul oranı nedir?",
+   "relevant_document_ids": [
+    "xquad::332f4f2a16e8"
+   ]
+  },
+  {
+   "case_id": "5727d1c93acd2414000ded42",
+   "layer": "overlap",
+   "query": "Hangi yılda erken bir kabul programı yeniden başlatıldı?",
+   "relevant_document_ids": [
+    "xquad::332f4f2a16e8"
+   ]
+  },
+  {
+   "case_id": "572811434b864d190016438d",
+   "layer": "overlap",
+   "query": "Dokuzuncu ve Onuncu Doktorların ikincil arkadaşları kimdi?",
+   "relevant_document_ids": [
+    "xquad::295b21c2bc50"
+   ]
+  },
+  {
+   "case_id": "572811434b864d190016438f",
+   "layer": "overlap",
+   "query": "Canlanmanın 10. serisi için yeni arkadaş kimdi?",
+   "relevant_document_ids": [
+    "xquad::295b21c2bc50"
+   ]
+  },
+  {
+   "case_id": "57281ab63acd2414000df496",
+   "layer": "overlap",
+   "query": "Jacksonville'deki yeni bina projelerinden kim sorumluydu?",
+   "relevant_document_ids": [
+    "xquad::4b31d4490b87"
+   ]
+  },
+  {
+   "case_id": "5728202c4b864d19001644ee",
+   "layer": "overlap",
+   "query": "Macarlar bu sivil itaatsizliği hangi kişinin liderliğinde gerçekleştirdi?",
+   "relevant_document_ids": [
+    "xquad::cf08fc786f70"
+   ]
+  },
+  {
+   "case_id": "572824f13acd2414000df58f",
+   "layer": "overlap",
+   "query": "Hangi frtına Jacksonville üzerinde en önemli etkiyi yaptı?",
+   "relevant_document_ids": [
+    "xquad::4f9c5fc6bc13"
+   ]
+  },
+  {
+   "case_id": "572828383acd2414000df5c7",
+   "layer": "overlap",
+   "query": "Hangi oyuncu, asıl aktörün hastalığından dolayı Doktor Kim'in yerine geçti?",
+   "relevant_document_ids": [
+    "xquad::53deafe5acc9"
+   ]
+  },
+  {
+   "case_id": "57286951ff5b5019007da210",
+   "layer": "overlap",
+   "query": "Amerika'nın en zengin üçüncü adamı kimdir?",
+   "relevant_document_ids": [
+    "xquad::df7fb5061408"
+   ]
+  },
+  {
+   "case_id": "57286951ff5b5019007da212",
+   "layer": "overlap",
+   "query": "McKinsey & Company kurucusu kimdir?",
+   "relevant_document_ids": [
+    "xquad::df7fb5061408"
+   ]
+  },
+  {
+   "case_id": "572870b2ff5b5019007da222",
+   "layer": "overlap",
+   "query": "Hangi Nobel Ekonomi Ödülü kazananı aynı zamanda bir üniversite mezun üyesidir?",
+   "relevant_document_ids": [
+    "xquad::4b5ae7782389"
+   ]
+  },
+  {
+   "case_id": "5728e07e3acd2414000e00e9",
+   "layer": "overlap",
+   "query": "Basit bir sivil itaatsizlik biçimi nedir?",
+   "relevant_document_ids": [
+    "xquad::cf08fc786f70"
+   ]
+  },
+  {
+   "case_id": "5728e715ff5b5019007da918",
+   "layer": "paraphrase",
+   "query": "Büyük şirketleri şiddetsiz bir şekilde nasıl protesto edebilirsiniz?",
+   "relevant_document_ids": [
+    "xquad::632a7b9036e2"
+   ]
+  },
+  {
+   "case_id": "5728eef92ca10214002daab4",
+   "layer": "overlap",
+   "query": "Hangi ünlü Hintli suçunu kabul etti ve kendini mahkemelerin insafına bıraktı?",
+   "relevant_document_ids": [
+    "xquad::0fa7d3490f18"
+   ]
+  },
+  {
+   "case_id": "57290ee2af94a219006a9fff",
+   "layer": "overlap",
+   "query": "Hükümet kurulması konusunda Kibaki ve Odinga ne zaman bir anlaşma imzaladı?",
+   "relevant_document_ids": [
+    "xquad::befc64e9db85"
+   ]
+  },
+  {
+   "case_id": "57290ee2af94a219006aa000",
+   "layer": "overlap",
+   "query": "Odinga'nın hükümetteki rolü ne olacaktı?",
+   "relevant_document_ids": [
+    "xquad::befc64e9db85"
+   ]
+  },
+  {
+   "case_id": "572914f46aef051400154a47",
+   "layer": "overlap",
+   "query": "Ülkeyi 2013'de kim ziyaret etmemeyi tercih etti?",
+   "relevant_document_ids": [
+    "xquad::c1805d2e1ea9"
+   ]
+  },
+  {
+   "case_id": "57294209af94a219006aa202",
+   "layer": "overlap",
+   "query": "\"Bin Yıllık Kuzey Yarımküre sıcaklık rekonstrüksiyonu\" grafiğinin dayandığı makaleyi kim yazmıştır?",
+   "relevant_document_ids": [
+    "xquad::3754732fbdc3"
+   ]
+  },
+  {
+   "case_id": "57294e6b1d04691400779275",
+   "layer": "overlap",
+   "query": "Ozon incelmesi ile başarılı şekilde mücadele eden nedir?",
+   "relevant_document_ids": [
+    "xquad::c5629eaebee2"
+   ]
+  },
+  {
+   "case_id": "57294e6b1d04691400779277",
+   "layer": "overlap",
+   "query": "Kimin hedefleri IPCC'ye halen sıklıkla karşı gelmektedir?",
+   "relevant_document_ids": [
+    "xquad::c5629eaebee2"
+   ]
+  },
+  {
+   "case_id": "572957ad1d046914007792da",
+   "layer": "overlap",
+   "query": "Ne kadar önce siyanobakteri bir hücreye girmiştir?",
+   "relevant_document_ids": [
+    "xquad::6f408d64fbbb"
+   ]
+  },
+  {
+   "case_id": "5729582b1d046914007792e6",
+   "layer": "overlap",
+   "query": "Kloroplastidan ne anlama gelmektedir?",
+   "relevant_document_ids": [
+    "xquad::6669145fbd5d"
+   ]
+  },
+  {
+   "case_id": "572968cf1d046914007793ce",
+   "layer": "overlap",
+   "query": "İlk plastom ne zaman dizilenmiştir?",
+   "relevant_document_ids": [
+    "xquad::9625a9dc41a4"
+   ]
+  },
+  {
+   "case_id": "57296b151d046914007793f3",
+   "layer": "overlap",
+   "query": "Diatomlar ne çeşit bir kloroplasta sahiptir?",
+   "relevant_document_ids": [
+    "xquad::1d112d518c4b"
+   ]
+  },
+  {
+   "case_id": "57296d571d04691400779413",
+   "layer": "overlap",
+   "query": "Asal bir sayının 1 sayısına ek olarak alabileceği tek bölen sayı hangisidir?",
+   "relevant_document_ids": [
+    "xquad::ec8d534451fb"
+   ]
+  },
+  {
+   "case_id": "57296f293f37b319004783a3",
+   "layer": "overlap",
+   "query": "Bir sayının asal olup olmadığını belirleyen niteliğin adı nedir?",
+   "relevant_document_ids": [
+    "xquad::962654a3eb46"
+   ]
+  },
+  {
+   "case_id": "57296f293f37b319004783a6",
+   "layer": "overlap",
+   "query": "Büyük sayıların asallığını uygun şekilde denemekte kullanışlı olan diğer algoritmanın adı nedir?",
+   "relevant_document_ids": [
+    "xquad::962654a3eb46"
+   ]
+  },
+  {
+   "case_id": "57296f293f37b319004783a7",
+   "layer": "overlap",
+   "query": "Ocak 2016 itibarıyla bilinen en büyük asal sayı kaç basamaktan oluşmaktadır?",
+   "relevant_document_ids": [
+    "xquad::962654a3eb46"
+   ]
+  },
+  {
+   "case_id": "57299a6f6aef051400155016",
+   "layer": "overlap",
+   "query": "Asal kelimesi genellikle neyi ifade eder?",
+   "relevant_document_ids": [
+    "xquad::51b93dd71108"
+   ]
+  },
+  {
+   "case_id": "5729e2316aef0514001550c4",
+   "layer": "overlap",
+   "query": "Amazon yağmur ormanı ne tür bir ormandır?",
+   "relevant_document_ids": [
+    "xquad::85a5b10a5fc0"
+   ]
+  },
+  {
+   "case_id": "5729feaf6aef05140015518c",
+   "layer": "overlap",
+   "query": "Amazon'da açılan arazinin yüzde kaçı canlı hayvan yetiştiriciliği için kullanılmaktadır?",
+   "relevant_document_ids": [
+    "xquad::cdf7d7ba6c85"
+   ]
+  },
+  {
+   "case_id": "572a07fc6aef0514001551dc",
+   "layer": "overlap",
+   "query": "Uyumlayıcı bağışıklık sisteminin hangi molekülleri sadece gerçekçenelilerde bulunur?",
+   "relevant_document_ids": [
+    "xquad::1b6de39254a8"
+   ]
+  },
+  {
+   "case_id": "572a07fc6aef0514001551df",
+   "layer": "overlap",
+   "query": "Bağışıklık sisteminin hangi kısmının evrimi gerçekçenelilerin evrimsel atasında meydana gelmiştir?",
+   "relevant_document_ids": [
+    "xquad::1b6de39254a8"
+   ]
+  },
+  {
+   "case_id": "572a1046af94a219006aa78d",
+   "layer": "overlap",
+   "query": "Stiglitz, 2009 yılında küresel eşitsizlik konusunda ne buldu?",
+   "relevant_document_ids": [
+    "xquad::15aafab808f3"
+   ]
+  },
+  {
+   "case_id": "572a11663f37b31900478694",
+   "layer": "overlap",
+   "query": "Kredi piyasası kusurlarının mevcudiyetindeki eşitsizlik, insan sermayesi oluşumu üzerinde nasıl bir etkiye sahiptir?",
+   "relevant_document_ids": [
+    "xquad::d1b2d7052a78"
+   ]
+  },
+  {
+   "case_id": "572a11663f37b31900478696",
+   "layer": "overlap",
+   "query": "Daha yüksek düzeylerle ilgili eşitsizlik nedir?",
+   "relevant_document_ids": [
+    "xquad::d1b2d7052a78"
+   ]
+  },
+  {
+   "case_id": "572a13841d0469140077973f",
+   "layer": "overlap",
+   "query": "Piketty, 1914-1945 arasındaki eşitsizliği azaltmada en büyük etkenlerin neler olduğunu düşünüyor?",
+   "relevant_document_ids": [
+    "xquad::14089177fdcb"
+   ]
+  },
+  {
+   "case_id": "572a18a4af94a219006aa7e3",
+   "layer": "overlap",
+   "query": "Daha uzun büyüme dönemleri ne ile ilişkilidir?",
+   "relevant_document_ids": [
+    "xquad::2b6c4b79ebec"
+   ]
+  },
+  {
+   "case_id": "572fadcbb2c2fd140056832b",
+   "layer": "overlap",
+   "query": "1979’da bağımsız bir İskoç Meclisi açmaya çalışmak nasıl sonuçlandı?",
+   "relevant_document_ids": [
+    "xquad::6817aaa16495"
+   ]
+  },
+  {
+   "case_id": "572fc6f204bcaa1900d76cf7",
+   "layer": "overlap",
+   "query": "Böylesine büyük bir rol üstlenen komitelere sahip olarak neyin telafi edilmesi amaçlanmaktadır?",
+   "relevant_document_ids": [
+    "xquad::6fb0ca8c2e9b"
+   ]
+  },
+  {
+   "case_id": "572fc6f204bcaa1900d76cf8",
+   "layer": "overlap",
+   "query": "Şahitlerden kanıt toplamak komitelerin hangi durumlarından bir tanesidir?",
+   "relevant_document_ids": [
+    "xquad::6fb0ca8c2e9b"
+   ]
+  },
+  {
+   "case_id": "572fcc43b2c2fd1400568480",
+   "layer": "overlap",
+   "query": "Ulaşım güvenliğinin birçok yönü kim tarafından ele alınır?",
+   "relevant_document_ids": [
+    "xquad::ab9da6295b01"
+   ]
+  },
+  {
+   "case_id": "572fdb17b2c2fd140056851f",
+   "layer": "overlap",
+   "query": "İskoç Parlamento üyesi olmak için kaç yaşında olmak gereklidir?",
+   "relevant_document_ids": [
+    "xquad::a71a648f61f6"
+   ]
+  },
+  {
+   "case_id": "572ff932a23a5019007fcbd6",
+   "layer": "overlap",
+   "query": "İslamcılığın destekçileri görüşlerinin neyi yansıttıklarına inanmaktadırlar?",
+   "relevant_document_ids": [
+    "xquad::d3985a7d3516"
+   ]
+  },
+  {
+   "case_id": "572ffd75b2c2fd14005686e5",
+   "layer": "overlap",
+   "query": "Son buzul devri ne zaman başladı?",
+   "relevant_document_ids": [
+    "xquad::40969eaab714"
+   ]
+  },
+  {
+   "case_id": "572ffd75b2c2fd14005686e8",
+   "layer": "overlap",
+   "query": "Kuzey Denizi seviyesi son soğuk fazda bugün olduğundan daha ne kadar düşüktü?",
+   "relevant_document_ids": [
+    "xquad::40969eaab714"
+   ]
+  },
+  {
+   "case_id": "572ffd75b2c2fd14005686e9",
+   "layer": "overlap",
+   "query": "Kuzey Denizi ve İrlanda Denizi’nin yanında, başka neyin seviyesi son soğuk fazda düşüktü?",
+   "relevant_document_ids": [
+    "xquad::40969eaab714"
+   ]
+  },
+  {
+   "case_id": "572ffe6fb2c2fd14005686f3",
+   "layer": "overlap",
+   "query": "Yetersiz hükümetlerin sosyal adalete bağlılığı ne ile sınırlıdır?",
+   "relevant_document_ids": [
+    "xquad::d8708aefe4f6"
+   ]
+  },
+  {
+   "case_id": "57302700a23a5019007fce8c",
+   "layer": "overlap",
+   "query": "Turabi güçlü bir ekonomik temeli nasıl oluşturdu?",
+   "relevant_document_ids": [
+    "xquad::b2a9e6572c9f"
+   ]
+  },
+  {
+   "case_id": "57302700a23a5019007fce8d",
+   "layer": "overlap",
+   "query": "Turabi, kendi görüşlerine sempati duyan öğrencileri nereye yerleştirdi?",
+   "relevant_document_ids": [
+    "xquad::b2a9e6572c9f"
+   ]
+  },
+  {
+   "case_id": "57302bd0b2c2fd14005689dd",
+   "layer": "overlap",
+   "query": "İslam Devleti 2014 yılında kendini ne ilan etti?",
+   "relevant_document_ids": [
+    "xquad::796f36106ff6"
+   ]
+  },
+  {
+   "case_id": "57302bd0b2c2fd14005689df",
+   "layer": "overlap",
+   "query": "İslam Devleti uluslararası toplumdan ne görmemektedir?",
+   "relevant_document_ids": [
+    "xquad::796f36106ff6"
+   ]
+  },
+  {
+   "case_id": "573088da069b53140083216b",
+   "layer": "overlap",
+   "query": "Friedrich Ratzel nerede doğdu?",
+   "relevant_document_ids": [
+    "xquad::55b8c799ccca"
+   ]
+  },
+  {
+   "case_id": "573088da069b53140083216d",
+   "layer": "overlap",
+   "query": "Halford Mackinder ve Friedrich Ratzel ne tür coğrafyacılardı?",
+   "relevant_document_ids": [
+    "xquad::55b8c799ccca"
+   ]
+  },
+  {
+   "case_id": "57309921396df919000961f6",
+   "layer": "overlap",
+   "query": "Birleşik Metodist Kilisesi olacak hareket ne zaman başladı?",
+   "relevant_document_ids": [
+    "xquad::6b00056930e5"
+   ]
+  },
+  {
+   "case_id": "57309ef18ab72b1400f9c600",
+   "layer": "overlap",
+   "query": "Bazıları kapitalizm, emperyalizm ve ne arasında bir ilişki olduğunu tartışıyor?",
+   "relevant_document_ids": [
+    "xquad::7ddf635171ab"
+   ]
+  },
+  {
+   "case_id": "5730b9852461fd1900a9cffa",
+   "layer": "overlap",
+   "query": "Kilise, Hıristiyanlar olarak, Tanrı'nın huzurunda neyin her iki şeklinin de yanlış olduğunun farkında olduklarını belirtiyor? \"",
+   "relevant_document_ids": [
+    "xquad::1d59db9edc45"
+   ]
+  },
+  {
+   "case_id": "573380e0d058e614000b5beb",
+   "layer": "overlap",
+   "query": "Hangi bölgelerde arabalar için kayıt numaralarının hepsi aynı tiptir?",
+   "relevant_document_ids": [
+    "xquad::2f16bcb03a05"
+   ]
+  },
+  {
+   "case_id": "5733834ed058e614000b5c29",
+   "layer": "overlap",
+   "query": "2009 Ağustos ayında WSE'de kaç tane şirket listelenmiştir?",
+   "relevant_document_ids": [
+    "xquad::411685678d6e"
+   ]
+  },
+  {
+   "case_id": "5733a32bd058e614000b5f34",
+   "layer": "overlap",
+   "query": "Polonya kupayı kaç kez kazanmıştır?",
+   "relevant_document_ids": [
+    "xquad::780211fac41c"
+   ]
+  },
+  {
+   "case_id": "5733d4c8d058e614000b6355",
+   "layer": "overlap",
+   "query": "Montreal ne zaman ele geçirildi?",
+   "relevant_document_ids": [
+    "xquad::35d83a9d5581"
+   ]
+  },
+  {
+   "case_id": "5733f1784776f41900661575",
+   "layer": "overlap",
+   "query": "Saint-Pierre’i rahatlatmak için Duquesne kaç adam gönderdi?",
+   "relevant_document_ids": [
+    "xquad::a9377641b8fe"
+   ]
+  },
+  {
+   "case_id": "5733fb7bd058e614000b6701",
+   "layer": "overlap",
+   "query": "İngiltere resmen Fransa'ya ne zaman savaş ilan etti ?",
+   "relevant_document_ids": [
+    "xquad::1559cccde3fc"
+   ]
+  },
+  {
+   "case_id": "5737821cc3c5551400e51f1a",
+   "layer": "overlap",
+   "query": "Kuantum mekaniği hangi yüzyılda yapıldı?",
+   "relevant_document_ids": [
+    "xquad::d6d530fdd6ad"
+   ]
+  },
+  {
+   "case_id": "57378c9b1c456719005744aa",
+   "layer": "overlap",
+   "query": "Elektrostatik ve manyetik kuvvetin toplamı olarak yazılı olan nedir?",
+   "relevant_document_ids": [
+    "xquad::4e4a925094fc"
+   ]
+  },
+  {
+   "case_id": "5737a25ac3c5551400e51f54",
+   "layer": "overlap",
+   "query": "Hacimdeki alanı hesaplarken basınç terimlerini neler içerir?",
+   "relevant_document_ids": [
+    "xquad::4e1abc938a04"
+   ]
+  }
+ ]
+}

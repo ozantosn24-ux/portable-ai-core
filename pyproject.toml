@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wozto-portable-ai-core"
+version = "0.1.0"
+description = "Cloud-neutral reference core for tenant-safe Wozto AI applications"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic>=2.10,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.scripts]
+wozto-rag-ingest = "wozto_ai_reference.ingest:main"
+wozto-rag-eval = "wozto_ai_reference.evaluation:main"
+
+[project.optional-dependencies]
+# Gercek anlamsal gomme (e5). CEKIRDEGE DAHIL DEGIL: `torch` ~200 MB+ ve bu paketin
+# tasarim hedefi bulut-notr, hafif bir cekirdek. `E5EmbeddingProvider` bu extra
+# kurulu degilse import aninda degil, ilk KULLANIMDA anlasilir hata verir.
+embeddings = [
+  "torch>=2.4,<3",
+  "transformers>=4.44,<6",
+]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.3,<10",
+  "pytest-cov>=6,<8",
+  "ruff>=0.12,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+branch = true
+source = ["wozto_ai_reference"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]

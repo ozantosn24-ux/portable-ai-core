@@ -1,0 +1,54 @@
+{
+  "cases": [
+    {
+      "case_id": "refund-human-review",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "operator-1",
+        "roles": ["employee"]
+      },
+      "query": "Who reviews a refund request before action?",
+      "relevant_document_ids": ["refund-policy::0001"]
+    },
+    {
+      "case_id": "refund-automation",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "operator-1",
+        "roles": ["employee"]
+      },
+      "query": "Are automated refunds allowed?",
+      "relevant_document_ids": ["refund-policy::0001"]
+    },
+    {
+      "case_id": "audit-retention",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "operator-1",
+        "roles": ["employee"]
+      },
+      "query": "How long are operational audit logs retained?",
+      "relevant_document_ids": ["data-retention::0001"]
+    },
+    {
+      "case_id": "finance-readback",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "finance-1",
+        "roles": ["finance"]
+      },
+      "query": "What is required after a finance payment approval?",
+      "relevant_document_ids": ["finance-approval::0001"]
+    },
+    {
+      "case_id": "tenant-shipping",
+      "principal": {
+        "tenant_id": "tenant-other",
+        "user_id": "operator-2",
+        "roles": ["employee"]
+      },
+      "query": "How are domestic orders delivered?",
+      "relevant_document_ids": ["shipping-policy::0001"]
+    }
+  ]
+}

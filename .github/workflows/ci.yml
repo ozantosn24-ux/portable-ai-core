@@ -1,0 +1,180 @@
+# pgvector deposunu GERCEK Postgres'te kostur.
+#
+# NEDEN VAR (2026-08-17, olculdu - tahmin degil):
+# Repo'da `PgVectorStore` kodu, testi ve yesil bir CI vardi. AMA:
+#   . `tests/test_pgvector_integration.py` -> `skipif(not DATABASE_URL)`
+#   . `WOZTO_REFERENCE_TEST_DATABASE_URL` HICBIR YERDE set edilmiyordu
+# => test HIC KOSMAMISTI. `pytest -q` ciktisinda "1 skipped", exit 0, CI yesil.
+# Ariza sinifi: "CI yesil != CI olcuyor" - kapi bakabildigi yerde geciyordu.
+# Test onemsiz de degil: paketin CEKIRDEK GUVENLIK IDDIASINI sinar - tenant
+# izolasyonu + ACL filtresi (yetkisiz principal `[]` almali, yetkili belgeyi almali).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 6 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pgvector:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # pgvector eklentisi ONCEDEN kurulu imaj; `initialize()` icindeki
+        # `CREATE EXTENSION IF NOT EXISTS vector` ancak boyle basarili olur.
+        # Surum PINLI (`latest` yok).
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: wozto_ref
+          # CI-omurluk sahte deger.
+          POSTGRES_PASSWORD: dummy-ci-pgvector-pw
+          POSTGRES_DB: wozto_ref
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wozto_ref -d wozto_ref"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Kilit dosyasi Python 3.14 ile uretildi (`pip-compile` basligina bak);
+          # --require-hashes farkli surumde cozunurluk kaymasiyla patlayabilir.
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      - name: Install (hash-verified)
+        run: |
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install --no-deps -e .
+
+      - name: Postgres GERCEKTEN hazir mi + pgvector eklentisi VAR mi
+        # `services` health-check yesil demek baglanabildigim anlamina gelmez;
+        # ayrica eklentinin KURULABILIR oldugunu gormek gerek.
+        env:
+          PGPASSWORD: dummy-ci-pgvector-pw
+        run: |
+          psql -h 127.0.0.1 -U wozto_ref -d wozto_ref -tAc "select version()" | head -1
+          psql -h 127.0.0.1 -U wozto_ref -d wozto_ref -tAc \
+            "select count(*) from pg_available_extensions where name='vector'" > /tmp/ext
+          echo "kullanilabilir 'vector' eklentisi sayisi: $(cat /tmp/ext)"
+          test "$(cat /tmp/ext)" = "1" || { echo "KIRMIZI: imajda pgvector YOK"; exit 1; }
+
+      - name: KAPI - test ATLANMADI mi (asil ariza buydu)
+        env:
+          WOZTO_REFERENCE_TEST_DATABASE_URL: postgresql://wozto_ref:dummy-ci-pgvector-pw@127.0.0.1:5432/wozto_ref
+        # pytest'in exit 0'i YETMEZ: test SKIP edilse de exit 0 gelir ve job yesil
+        # kalir - yani duzeltmek icin yazdigimiz job, duzeltmedigini gizleyebilirdi.
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_pgvector_integration.py -q -rs 2>&1 | tee /tmp/out
+          # SABIT SAYI YAZMA: kapinin isi "kac test gecti" degil, (1) en az bir test
+          # gercekten kostu mu (2) hicbiri ATLANDI mi.
+          grep -qE "^[0-9]+ passed" /tmp/out \
+            || { echo "KIRMIZI: hic test GECMEDI - suite kosmamis olabilir"; exit 1; }
+          if grep -qi "skipped" /tmp/out; then
+            echo "KIRMIZI: test ATLANDI - env degiskeni ulasmamis, kapi yine olcmuyor"
+            exit 1
+          fi
+          echo "YESIL: pgvector testleri GERCEK Postgres'te KOSTU"
+
+      - name: POZITIF KONTROL - kapi gercekten olcuyor mu
+        # Yukaridaki yesil "bakilamadi"dan gelemez mi? Env degiskenini KASITLI
+        # kaldirip ayni kontrolun KIRMIZI verdigini gosteriyoruz.
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_pgvector_integration.py -q -rs 2>&1 | tee /tmp/out2 || true
+          if grep -qi "skipped" /tmp/out2; then
+            echo "YESIL: env yokken test ATLANIYOR => yukaridaki 'passed' gercek bir kosudur"
+          else
+            echo "KIRMIZI: env olmadan da atlanmadi - skip kosulu degismis, kapi olcmuyor"
+            exit 1
+          fi
+
+      - name: Paketin geri kalani da kossun (regresyon)
+        run: python -m pytest -q
+
+  # ---------------------------------------------------------------------------
+  # HIBRIT DENEYI - dense-only / lexical-only / hibrit, agirlik taramali.
+  #
+  # YALNIZ `workflow_dispatch`. Bu bir DENEY SONUCUDUR, regresyon kapisi DEGIL.
+  # Korpus, gold-set, model ve kod pinliyken haftalik tekrar yeni bilgi uretmez,
+  # sadece kota yakar (torch ~200 MB + model ~470 MB indirme). Tekrarlanabilirlik
+  # schedule'dan degil PIN'den gelir: git SHA + model revizyonu + dondurulmus set.
+  hybrid-experiment:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: wozto_ref
+          POSTGRES_PASSWORD: dummy-ci-pgvector-pw
+          POSTGRES_DB: wozto_ref
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wozto_ref -d wozto_ref"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Kilit dosyasi Python 3.14 ile uretildi (`pip-compile` basligina bak);
+          # --require-hashes farkli surumde cozunurluk kaymasiyla patlayabilir.
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      - name: Install (hash-verified) + embeddings extra
+        # `torch`/`transformers` kilitte YOK (cekirdek bilincli olarak hafif).
+        run: |
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install --no-deps -e .
+          python -m pip install "torch>=2.4,<3" "transformers>=4.44,<6" \
+            --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: DENEY - gercek Postgres + gercek e5
+        env:
+          DB: postgresql://wozto_ref:dummy-ci-pgvector-pw@127.0.0.1:5432/wozto_ref
+        run: |
+          set -o pipefail
+          python scripts/run_hybrid_experiment.py \
+            --data data/xquad-tr \
+            --provider pgvector \
+            --embeddings e5 \
+            --database-url "$DB" \
+            --top-k 5 \
+            --primary-weight 0.7 \
+            --text-search-config turkish \
+            --out results/xquad-tr-e5.json | tee /tmp/claim.txt
+
+      - name: KAPI - deney gercekten kostu mu (sonuc NE OLURSA OLSUN)
+        # Bu adim "hibrit kazandi mi" diye BAKMAZ. Deney bir kapi degildir; kaybetmek
+        # de bir sonuctur ve gizlenmemelidir. Yalnizca kosunun SAHICILIGI sinanir.
+        run: python scripts/assert_experiment_ran.py results/xquad-tr-e5.json
+
+      - name: Sonucu artefakt olarak yukle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hybrid-experiment-result
+          path: results/
+          if-no-files-found: warn

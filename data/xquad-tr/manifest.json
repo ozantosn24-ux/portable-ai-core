@@ -1,0 +1,15 @@
+{
+ "cases": 150,
+ "cases_sha256": "c04a59afc60ceb461763ffe6e1192d09239ad1ecdd26c849075a9df97a147bcd",
+ "corpus_sha256": "10345079dbf03be8e339a6e11a52bdf1cef41b9f71ea19952ed73bab0559e445",
+ "documents": 240,
+ "layers": {
+  "morphology": 1,
+  "overlap": 148,
+  "paraphrase": 1
+ },
+ "license": "CC BY-SA 4.0 (share-alike; turev calisma ayni lisansla dagitilir)",
+ "sample_seed": 20260817,
+ "source": "https://github.com/google-deepmind/xquad — xquad.tr.json",
+ "source_sha256": "92179a564774b7696100d144c1e10870d0a966b6fccbdd254a65b9d2ab1971cc"
+}

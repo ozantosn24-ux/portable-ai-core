@@ -1,0 +1,506 @@
+{
+ "claim_sentence": "N=150, k=5 (morphology=1, overlap=148, paraphrase=1) | recall: hibrit w={0.6, 0.7, 0.8, 0.9} icin iki bacagi da gecti (en iyi w=0.8 -> 0.993; lexical-only=0.840, dense-only=0.973; katmanlarda tutarli; hukme KATILMAYAN katmanlar (ornek yetersiz): morphology(n=1), paraphrase(n=1); GA sifiri DISLAMIYOR => ustunluk gurultuden ayirt edilemiyor; birincil w=0.7: gecti) | mrr: hibrit w={0.7, 0.8, 0.9} icin iki bacagi da gecti (en iyi w=0.8 -> 0.963; lexical-only=0.670, dense-only=0.934; katmanlarda tutarli; hukme KATILMAYAN katmanlar (ornek yetersiz): morphology(n=1), paraphrase(n=1); GA sifiri DISLAMIYOR => ustunluk gurultuden ayirt edilemiyor; birincil w=0.7: gecti)",
+ "points": [
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.6787162162162163,
+     "recall_at_k": 0.8513513513513513,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.6696666666666666,
+    "recall_at_k": 0.84,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.0
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.7466216216216216,
+     "recall_at_k": 0.8918918918918919,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.7366666666666667,
+    "recall_at_k": 0.88,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.1
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.7781531531531531,
+     "recall_at_k": 0.918918918918919,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.7677777777777778,
+    "recall_at_k": 0.9066666666666666,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.2
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.8117117117117117,
+     "recall_at_k": 0.9391891891891891,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.800888888888889,
+    "recall_at_k": 0.9266666666666666,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.3
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.8448198198198198,
+     "recall_at_k": 0.9594594594594594,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.8335555555555555,
+    "recall_at_k": 0.9466666666666667,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.4
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.892454954954955,
+     "recall_at_k": 0.9797297297297297,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.8805555555555556,
+    "recall_at_k": 0.9666666666666667,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.5
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 0.2,
+     "recall_at_k": 1.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.9335585585585585,
+     "recall_at_k": 0.9932432432432432,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.9224444444444445,
+    "recall_at_k": 0.9866666666666667,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.6
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 0.3333333333333333,
+     "recall_at_k": 1.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.9622747747747747,
+     "recall_at_k": 0.9932432432432432,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.0,
+     "recall_at_k": 0.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.9516666666666667,
+    "recall_at_k": 0.9866666666666667,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.7
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 1.0,
+     "recall_at_k": 1.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.9679054054054054,
+     "recall_at_k": 0.9932432432432432,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.2,
+     "recall_at_k": 1.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.963,
+    "recall_at_k": 0.9933333333333333,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.8
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 1.0,
+     "recall_at_k": 1.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.955518018018018,
+     "recall_at_k": 0.9864864864864865,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.25,
+     "recall_at_k": 1.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.951111111111111,
+    "recall_at_k": 0.9866666666666667,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 0.9
+  },
+  {
+   "layers": [
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "morphology",
+     "mean_reciprocal_rank": 1.0,
+     "recall_at_k": 1.0,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 148,
+     "duplicate_case_ids": 0,
+     "layer": "overlap",
+     "mean_reciprocal_rank": 0.9371621621621621,
+     "recall_at_k": 0.972972972972973,
+     "unauthorized_hits": 0
+    },
+    {
+     "cases": 1,
+     "duplicate_case_ids": 0,
+     "layer": "paraphrase",
+     "mean_reciprocal_rank": 0.3333333333333333,
+     "recall_at_k": 1.0,
+     "unauthorized_hits": 0
+    }
+   ],
+   "overall": {
+    "cases": 150,
+    "duplicate_case_ids": 0,
+    "mean_reciprocal_rank": 0.9335555555555556,
+    "recall_at_k": 0.9733333333333334,
+    "unauthorized_hits": 0
+   },
+   "vector_weight": 1.0
+  }
+ ],
+ "provenance": {
+  "cases": 150,
+  "data_dir": "data/xquad-tr",
+  "data_manifest": {
+   "cases": 150,
+   "cases_sha256": "c04a59afc60ceb461763ffe6e1192d09239ad1ecdd26c849075a9df97a147bcd",
+   "corpus_sha256": "10345079dbf03be8e339a6e11a52bdf1cef41b9f71ea19952ed73bab0559e445",
+   "documents": 240,
+   "layers": {
+    "morphology": 1,
+    "overlap": 148,
+    "paraphrase": 1
+   },
+   "license": "CC BY-SA 4.0 (share-alike; turev calisma ayni lisansla dagitilir)",
+   "sample_seed": 20260817,
+   "source": "https://github.com/google-deepmind/xquad — xquad.tr.json",
+   "source_sha256": "92179a564774b7696100d144c1e10870d0a966b6fccbdd254a65b9d2ab1971cc"
+  },
+  "documents": 240,
+  "embedding_space": "intfloat/multilingual-e5-small@614241f622f53c4eeff9890bdc4f31cfecc418b3",
+  "embeddings": "e5",
+  "git_sha": "2715852daf00a9cdbab91192845c404727136add",
+  "primary_weight": 0.7,
+  "provider": "pgvector",
+  "text_search_config": "turkish",
+  "top_k": 5,
+  "weights": [
+   0.0,
+   0.1,
+   0.2,
+   0.3,
+   0.4,
+   0.5,
+   0.6,
+   0.7,
+   0.8,
+   0.9,
+   1.0
+  ]
+ },
+ "verdicts": [
+  {
+   "beats_both_legs": true,
+   "best_value": 0.9933333333333333,
+   "best_weight": 0.8,
+   "ci_vs_dense": [
+    -0.013333333333333334,
+    0.04
+   ],
+   "ci_vs_lexical": [
+    0.09333333333333334,
+    0.20666666666666667
+   ],
+   "consistent_across_layers": true,
+   "contiguous": true,
+   "dense_only": 0.9733333333333334,
+   "lexical_only": 0.84,
+   "metric": "recall",
+   "primary_beats_both_legs": true,
+   "primary_value": 0.9866666666666667,
+   "primary_weight": 0.7,
+   "significant": false,
+   "skipped_layers": [
+    "morphology(n=1)",
+    "paraphrase(n=1)"
+   ],
+   "winning_weights": [
+    0.6,
+    0.7,
+    0.8,
+    0.9
+   ]
+  },
+  {
+   "beats_both_legs": true,
+   "best_value": 0.963,
+   "best_weight": 0.8,
+   "ci_vs_dense": [
+    -0.01722222222222222,
+    0.05822222222222223
+   ],
+   "ci_vs_lexical": [
+    0.22599999999999998,
+    0.3417777777777778
+   ],
+   "consistent_across_layers": true,
+   "contiguous": true,
+   "dense_only": 0.9335555555555556,
+   "lexical_only": 0.6696666666666666,
+   "metric": "mrr",
+   "primary_beats_both_legs": true,
+   "primary_value": 0.9516666666666667,
+   "primary_weight": 0.7,
+   "significant": false,
+   "skipped_layers": [
+    "morphology(n=1)",
+    "paraphrase(n=1)"
+   ],
+   "winning_weights": [
+    0.7,
+    0.8,
+    0.9
+   ]
+  }
+ ]
+}
