@@ -7,7 +7,11 @@ name = "wozto-portable-ai-core"
 version = "0.1.0"
 description = "Cloud-neutral reference core for tenant-safe Wozto AI applications"
 readme = "README.md"
-requires-python = ">=3.12"
+# 3.14'e DARALTILDI (2026-08-19, operator karari): ">=3.12" yaziyordu ama 3.12 HIC
+# olculmedi - gelistirme makinesinde yalniz 3.14 var, kilit 3.14 ile uretildi ve CI
+# 3.14'te kosuyor. Olculmemis destek iddiasi tasimamak icin daraltildi; 3.12 destegi
+# istenirse once CI matrix'ine eklenip OLCULUR, sonra bu satir genisletilir.
+requires-python = ">=3.14"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = [
