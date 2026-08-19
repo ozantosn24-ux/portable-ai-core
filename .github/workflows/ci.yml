@@ -50,8 +50,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          # Kilit dosyasi Python 3.14 ile uretildi (`pip-compile` basligina bak);
-          # --require-hashes farkli surumde cozunurluk kaymasiyla patlayabilir.
+          # Kilit `uv pip compile --universal --python-version 3.14` ile uretildi:
+          # platform markerlari dahil (Windows'ta uretilip Linux'ta koşabilsin diye).
+          # --require-hashes farkli Python surumunde cozunurluk kaymasiyla patlayabilir.
           python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements.lock
@@ -137,8 +138,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          # Kilit dosyasi Python 3.14 ile uretildi (`pip-compile` basligina bak);
-          # --require-hashes farkli surumde cozunurluk kaymasiyla patlayabilir.
+          # Kilit `uv pip compile --universal --python-version 3.14` ile uretildi:
+          # platform markerlari dahil (Windows'ta uretilip Linux'ta koşabilsin diye).
+          # --require-hashes farkli Python surumunde cozunurluk kaymasiyla patlayabilir.
           python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements.lock
