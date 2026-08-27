@@ -24,6 +24,7 @@ dependencies = [
 [project.scripts]
 wozto-rag-ingest = "wozto_ai_reference.ingest:main"
 wozto-rag-eval = "wozto_ai_reference.evaluation:main"
+wozto-rag-mcp = "wozto_ai_reference.mcp_server:run"
 
 [project.optional-dependencies]
 # Gercek anlamsal gomme (e5). CEKIRDEGE DAHIL DEGIL: `torch` ~200 MB+ ve bu paketin
@@ -32,6 +33,13 @@ wozto-rag-eval = "wozto_ai_reference.evaluation:main"
 embeddings = [
   "torch>=2.4,<3",
   "transformers>=4.44,<6",
+]
+# MCP stdio sunucusu. CEKIRDEGE DAHIL DEGIL: protokol SDK'si bu paketin bulut-notr
+# cekirdegiyle ilgisiz bir bagimlilik yuzeyi. `mcp_server` modulu SDK'yi ancak
+# `main()` icinde import eder, boylece extra kurulu olmadan da import/test edilebilir
+# -- sinirin testleri (tests/test_mcp_server.py) SDK olmadan kosar.
+mcp = [
+  "mcp>=1.2,<2",
 ]
 dev = [
   "httpx>=0.28,<1",

@@ -117,6 +117,66 @@ uvicorn wozto_ai_reference.api:app --port 8080
 Ingest her kaynak belgeyi transaction içinde tamamen değiştirir; eski sürümden kalan
 chunk'lar böylece sorgulanmaya devam etmez.
 
+## MCP sunucusu — yetki sınırını protokole taşımak
+
+`wozto_ai_reference.mcp_server`, aynı tenant+ACL filtreli sorgu servisini **stdio MCP
+sunucusu** olarak açar.
+
+**Neden ilginç:** bir arama fonksiyonunu MCP'ye sarmak kolaydır ve bir şey kanıtlamaz. Asıl
+problem şu: **MCP'nin kendi yetkilendirme modeli yoktur.** Bir araç çağrısı yalnızca bir ad ve
+bir JSON nesnesidir; o nesneyi, güvenilmeyen içerik okumuş olabilecek bir model kurar.
+Modelin argümana koymaya ikna edilebildiği her şey fiilen saldırgan kontrolündedir.
+
+Bu yüzden tek kural:
+
+> **Kimlik sunucu açılışında belirlenir. Asla bir araç argümanı değildir.**
+
+HTTP yüzeyiyle aynı duruş: `QueryPayload` bilinçli olarak kimlik taşımaz, principal header'dan
+bir `IdentityProvider` ile çözülür. Burada da principal, herhangi bir istemci konuşmadan önce,
+**süreç ortamından** bir kez çözülür (`WOZTO_MCP_TENANT_ID`, `WOZTO_MCP_USER_ID`,
+`WOZTO_MCP_ROLES`). Kimlik yoksa sunucu **başlamaz** — uydurmaz, sonradan istemciden de almaz.
+
+### Savunulacak iki tasarım kararı
+
+1. **Kimlik biçimli argümanlar reddedilir, sessizce yok sayılmaz.** `tenant_id`'yi sessizce
+   düşürmek çağırana "işledi" sandırır ve bir enjeksiyon denemesini normal trafikten ayırt
+   edilemez kılar. Ret hem güvenli hem **gözlenebilir**.
+2. **Abstain bir HATA değil, başarılı sonuçtur.** "Yetkili kaynak yok" cevabı, yetkilendirme
+   yolunun çalıştığının kanıtıdır. `isError` işaretlemek, istemcileri onu geçici arıza gibi
+   yeniden denemeye davet ederdi — tam tersi.
+
+### ⭐ Ölçülen sonuç: sınır İKİ katmanda korunuyor
+
+Kaçak `tenant_id` denemesi canlı istemcide **protokol katmanında** reddedildi
+(`additionalProperties: false` ⇒ *"Input validation error: Additional properties are not
+allowed"*), yani handler'a hiç ulaşmadı. Uygulama katmanındaki reddi ise yedekte durur.
+⚠️ **Yalnız (1)'e güvenmek yanlış olurdu:** her istemci/sunucu şema doğrulaması yapmaz ve bir
+güvenlik garantisi karşı tarafın nezaketine bağlanamaz. `scripts/mcp_smoke.py` ikisini de kabul
+eder ve **hangisinin ateşlediğini raporlar**.
+
+### Çalıştırma ve doğrulama
+
+```bash
+pip install -e ".[mcp]"
+
+# 1) Sınır sözleşmeleri (SDK gerekmez -- sunucu SDK'yi yalnız main() icinde import eder)
+pytest tests/test_mcp_server.py -q          # 32 test
+
+# 2) Gerçek istemciyle uçtan uca (sunucuyu stdio ile başlatır)
+python scripts/mcp_smoke.py                 # 9/9 kontrol
+
+# 3) Bir MCP istemcisine tanıtmak icin
+WOZTO_MCP_TENANT_ID=tenant-demo WOZTO_MCP_USER_ID=you WOZTO_MCP_ROLES=finance wozto-rag-mcp
+```
+
+Araçlar: `answer_from_authorized_sources` (yalnız yetkili kaynaklardan cevap + provenance'lı
+citation, yoksa abstain) · `describe_identity` (hangi tenant/rol olarak davranıldığını bildirir,
+**değiştiremez**).
+
+Sunucu **müşteri verisi taşımaz**: varsayılan korpus, HTTP demo'sunun kullandığı sentetik
+kümedir ve içine bilinçli olarak **başka bir tenant'a ait bir belge** konmuştur — sınır bozulursa
+onu yakalayacak pozitif kontrol budur.
+
 ## Doğrulama
 
 ```powershell
