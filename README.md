@@ -86,6 +86,18 @@ python -m wozto_ai_reference.evaluation `
   --gold-set sample-corpus/gold-set.json
 ```
 
+Gold set pozitif vakalarda ya tam chunk kimliklerini (`relevant_document_ids`) ya da
+kaynak-belge kimliklerini (`relevant_source_document_ids`) kullanır. Korpusta cevabı
+olmaması gereken ve yetki nedeniyle reddedilmesi gereken sorular
+`"expected_abstain": true` ile açıkça etiketlenir; rapor bunları retrieval recall'a
+karıştırmadan `abstain_accuracy` ve `unexpected_answers` olarak ölçer.
+
+`--minimum-score` serving katmanındaki aynı score kapısını yeniden üretir;
+`--minimum-abstain-accuracy` varsayılan olarak `1.0`dır. Arama skorları sağlayıcıya,
+modele ve korpusa bağlıdır. Özellikle sorgu-başı normalize edilmiş hibrit pgvector
+skorunda en iyi ilgisiz aday da `1.0` olabilir; ayrı bir negatif doğrulama kümesi olmadan
+eşik seçmek veya bu eşiği başka bir modele taşımak kalite iddiası değildir.
+
 Gerçek Vault pilotunda ayrı bir kaynak klasörü ve repo dışında tutulan manifest
 kullanılmalı; `.env`, credential/session depoları ve müşteri PII dosyaları manifest'e
 eklenmemelidir. İlk `--apply` öncesi dry-run çıktısındaki dosya/chunk/byte sayısı ve

@@ -1,6 +1,8 @@
 import asyncio
 from collections.abc import Sequence
 
+import pytest
+
 from wozto_ai_reference.adapters import DeterministicGroundedModel, InMemorySearchProvider, MemoryTelemetry
 from wozto_ai_reference.domain import Document, Principal, RetrievalHit
 from wozto_ai_reference.service import QueryService
@@ -138,3 +140,48 @@ def test_service_post_check_blocks_a_leaky_search_adapter() -> None:
 
     assert result.abstained is True
     assert result.citations == []
+
+
+def test_score_gate_abstains_without_calling_model() -> None:
+    candidate = RetrievalHit(
+        document=_document(
+            tenant_id="tenant-a",
+            document_id="weak-candidate",
+            content="A weakly related candidate.",
+        ),
+        score=0.49,
+    )
+
+    class WeakSearch:
+        async def search(self, *, principal: Principal, query: str, limit: int):
+            return [candidate]
+
+    class FailIfCalledModel:
+        async def generate(self, *, query: str, hits: Sequence[RetrievalHit], trace_id: str) -> str:
+            raise AssertionError("model must not be called below the calibrated score gate")
+
+    service = QueryService(
+        search=WeakSearch(),
+        model=FailIfCalledModel(),
+        telemetry=MemoryTelemetry(),
+        minimum_score=0.5,
+    )
+    result = _run_query(
+        service,
+        principal=Principal(tenant_id="tenant-a", user_id="employee-1"),
+        query="unrelated question",
+    )
+
+    assert result.abstained is True
+    assert result.citations == []
+
+
+@pytest.mark.parametrize("minimum_score", [-0.1, float("nan"), float("inf")])
+def test_score_gate_rejects_invalid_thresholds(minimum_score: float) -> None:
+    with pytest.raises(ValueError, match="minimum_score"):
+        QueryService(
+            search=InMemorySearchProvider([]),
+            model=DeterministicGroundedModel(),
+            telemetry=MemoryTelemetry(),
+            minimum_score=minimum_score,
+        )

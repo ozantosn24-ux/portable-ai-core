@@ -1,5 +1,7 @@
 """Provider-neutral query orchestration with defense-in-depth authorization."""
 
+import math
+from collections.abc import Sequence
 from uuid import uuid4
 
 from .adapters import is_authorized
@@ -7,6 +9,31 @@ from .domain import Citation, Principal, QueryResult, RetrievalHit, TelemetryEve
 from .ports import ModelProvider, SearchProvider, TelemetryProvider
 
 _ABSTAIN_MESSAGE = "Yeterli ve yetkili kaynak bulunamadı."
+
+
+def eligible_hits(
+    *,
+    principal: Principal,
+    hits: Sequence[RetrievalHit],
+    minimum_score: float,
+    limit: int,
+) -> list[RetrievalHit]:
+    """Apply the same score and authorization gate in serving and evaluation.
+
+    `score` belongs to the search provider. A threshold is only meaningful after it
+    has been calibrated for that provider/model/corpus; this helper deliberately does
+    not invent a universal default.
+    """
+
+    if not math.isfinite(minimum_score) or minimum_score < 0.0:
+        raise ValueError("minimum_score must be a finite non-negative number")
+    if limit < 1:
+        raise ValueError("limit must be positive")
+    return [
+        hit
+        for hit in hits
+        if hit.score >= minimum_score and is_authorized(principal, hit.document)
+    ][:limit]
 
 
 class QueryService:
@@ -18,6 +45,8 @@ class QueryService:
         telemetry: TelemetryProvider,
         minimum_score: float = 0.01,
     ) -> None:
+        if not math.isfinite(minimum_score) or minimum_score < 0.0:
+            raise ValueError("minimum_score must be a finite non-negative number")
         self._search = search
         self._model = model
         self._telemetry = telemetry
@@ -38,11 +67,12 @@ class QueryService:
             query=clean_query,
             limit=limit,
         )
-        authorized_hits = [
-            hit
-            for hit in provider_hits
-            if hit.score >= self._minimum_score and is_authorized(principal, hit.document)
-        ][:limit]
+        authorized_hits = eligible_hits(
+            principal=principal,
+            hits=provider_hits,
+            minimum_score=self._minimum_score,
+            limit=limit,
+        )
 
         if not authorized_hits:
             self._record("query.abstained", trace_id, principal, {"authorized_hits": 0})
