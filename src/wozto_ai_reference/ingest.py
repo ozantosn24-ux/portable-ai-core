@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import hashlib
+import hmac
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .asyncio_compat import run as run_async
 from .domain import Document
 from .embedding import HashEmbeddingProvider
 from .ports import DocumentStore
@@ -18,6 +20,12 @@ from .ports import DocumentStore
 MAX_SOURCE_BYTES = 1_000_000
 _DOCUMENT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,119}$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+_PLAN_HASH = re.compile(r"^sha256:[0-9a-f]{64}$")
+PLAN_SCHEMA = "wozto-ingest-plan/v1"
+
+
+class PlanHashMismatch(ValueError):
+    """The operator-approved dry-run no longer matches the current ingest plan."""
 
 
 @dataclass(frozen=True)
@@ -47,6 +55,53 @@ class IngestPlan:
     @property
     def source_files(self) -> int:
         return len(self.batches)
+
+    @property
+    def plan_hash(self) -> str:
+        return compute_plan_hash(self)
+
+
+def compute_plan_hash(plan: IngestPlan) -> str:
+    """Fingerprint every persisted field without exposing document content."""
+    chunks = []
+    for batch in plan.batches:
+        for document in batch.documents:
+            chunks.append(
+                {
+                    "acl_roles": sorted(document.acl_roles),
+                    "content_hash": document.content_hash,
+                    "content_sha256": hashlib.sha256(document.content.encode("utf-8")).hexdigest(),
+                    "document_tenant_id": document.tenant_id,
+                    "document_id": document.document_id,
+                    "section": document.section,
+                    "source_document_id": batch.source_document_id,
+                    "source_uri": document.source_uri,
+                    "tenant_id": batch.tenant_id,
+                    "title": document.title,
+                    "version": document.version,
+                }
+            )
+    payload = {
+        "schema": PLAN_SCHEMA,
+        "chunks": sorted(
+            chunks,
+            key=lambda item: (
+                item["tenant_id"],
+                item["source_document_id"],
+                item["document_id"],
+                item["version"],
+            ),
+        ),
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def verify_plan_hash(plan: IngestPlan, *, expected_plan_hash: str) -> None:
+    if not _PLAN_HASH.fullmatch(expected_plan_hash):
+        raise PlanHashMismatch("expected plan hash must use the sha256:<64 lowercase hex> format")
+    if not hmac.compare_digest(plan.plan_hash, expected_plan_hash):
+        raise PlanHashMismatch("ingest plan changed after dry-run; inspect a new dry-run and approve its plan_hash")
 
 
 def _nonempty(value: object, *, field: str) -> str:
@@ -217,7 +272,13 @@ def build_plan(
     return IngestPlan(batches=tuple(batches), total_bytes=total_bytes)
 
 
-async def apply_plan(plan: IngestPlan, *, store: DocumentStore) -> int:
+async def apply_plan(
+    plan: IngestPlan,
+    *,
+    store: DocumentStore,
+    expected_plan_hash: str,
+) -> int:
+    verify_plan_hash(plan, expected_plan_hash=expected_plan_hash)
     for batch in plan.batches:
         await store.replace_source(
             tenant_id=batch.tenant_id,
@@ -233,7 +294,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--max-chars", type=int, default=1200)
     parser.add_argument("--overlap-chars", type=int, default=150)
-    parser.add_argument("--apply", action="store_true")
+    parser.add_argument(
+        "--apply",
+        metavar="PLAN_HASH",
+        help="apply only when the current plan matches this dry-run plan_hash",
+    )
     return parser
 
 
@@ -244,15 +309,22 @@ async def _run(args: argparse.Namespace) -> int:
         max_chars=args.max_chars,
         overlap_chars=args.overlap_chars,
     )
-    if not args.apply:
+    if args.apply is None:
         print(
             json.dumps(
-                {"mode": "dry_run", "source_files": plan.source_files, "chunks": len(plan.documents)},
+                {
+                    "mode": "dry_run",
+                    "source_files": plan.source_files,
+                    "chunks": len(plan.documents),
+                    "total_bytes": plan.total_bytes,
+                    "plan_hash": plan.plan_hash,
+                },
                 ensure_ascii=False,
             )
         )
         return 0
 
+    verify_plan_hash(plan, expected_plan_hash=args.apply)
     database_url = os.getenv("WOZTO_REFERENCE_DATABASE_URL")
     if not database_url:
         raise RuntimeError("WOZTO_REFERENCE_DATABASE_URL is required for --apply")
@@ -260,14 +332,27 @@ async def _run(args: argparse.Namespace) -> int:
 
     store = PgVectorStore(database_url=database_url, embeddings=HashEmbeddingProvider())
     await store.initialize()
-    applied = await apply_plan(plan, store=store)
-    print(json.dumps({"mode": "apply", "chunks": applied}, ensure_ascii=False))
+    applied = await apply_plan(
+        plan,
+        store=store,
+        expected_plan_hash=args.apply,
+    )
+    print(
+        json.dumps(
+            {"mode": "apply", "chunks": applied, "plan_hash": plan.plan_hash},
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 
 def main() -> int:
     args = _parser().parse_args()
-    return asyncio.run(_run(args))
+    try:
+        return run_async(_run(args))
+    except PlanHashMismatch as exc:
+        print(f"apply refused: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

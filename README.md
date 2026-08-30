@@ -73,10 +73,11 @@ verilen dosyaları tek tek listeler; CLI klasörü recursive taramaz.
 cd reference-implementations/portable-ai-core
 $env:PYTHONPATH="src"
 
-# Yalnız plan üretir; veritabanına yazmaz.
-python -m wozto_ai_reference.ingest `
+# Yalnız plan üretir; veritabanına yazmaz. Çıktıdaki sayıları ve plan_hash'i incele.
+$plan = python -m wozto_ai_reference.ingest `
   --source-root sample-corpus/documents `
-  --manifest sample-corpus/manifest.json
+  --manifest sample-corpus/manifest.json | ConvertFrom-Json
+$plan | Format-List mode, source_files, chunks, total_bytes, plan_hash
 
 # Küçük sentetik başlangıç kapısı; gerçek kalite için 30–50 insan-yazımı soru gerekir.
 python -m wozto_ai_reference.evaluation `
@@ -87,8 +88,11 @@ python -m wozto_ai_reference.evaluation `
 
 Gerçek Vault pilotunda ayrı bir kaynak klasörü ve repo dışında tutulan manifest
 kullanılmalı; `.env`, credential/session depoları ve müşteri PII dosyaları manifest'e
-eklenmemelidir. İlk `--apply` öncesi dry-run çıktısındaki dosya/chunk sayısı operatörce
-kontrol edilmelidir.
+eklenmemelidir. İlk `--apply` öncesi dry-run çıktısındaki dosya/chunk/byte sayısı ve
+manifest kapsamı operatörce kontrol edilmelidir. `plan_hash`; tenant, ACL, chunk kimliği,
+sürüm, kaynak URI'si ve yazılacak bütün içerik alanlarının hash'inden deterministik
+üretilir. Hash verilmeden apply çalışmaz; kaynak veya yetki dry-run'dan sonra değişirse
+veritabanına bağlanmadan önce reddedilir.
 
 ## İsteğe bağlı PostgreSQL + pgvector
 
@@ -108,10 +112,17 @@ $env:WOZTO_REFERENCE_DATABASE_URL="host=127.0.0.1 port=55432 dbname=wozto_rag us
 $env:WOZTO_REFERENCE_BACKEND="pgvector"
 $env:WOZTO_REFERENCE_ALLOW_INSECURE_HEADERS="1"
 
+# Apply öncesinde planı bu kaynak durumuyla yeniden üret ve incele.
+$plan = python -m wozto_ai_reference.ingest `
+  --source-root sample-corpus/documents `
+  --manifest sample-corpus/manifest.json | ConvertFrom-Json
+$plan | Format-List mode, source_files, chunks, total_bytes, plan_hash
+
+# Yalnız yukarıda incelenen plan birebir aynıysa yazar.
 python -m wozto_ai_reference.ingest `
   --source-root sample-corpus/documents `
   --manifest sample-corpus/manifest.json `
-  --apply
+  --apply $plan.plan_hash
 
 uvicorn wozto_ai_reference.api:app --port 8080
 ```
