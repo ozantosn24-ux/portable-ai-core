@@ -71,6 +71,21 @@ def test_vector_literal_rejects_wrong_dimensions_and_non_finite_values() -> None
         vector_literal([float("nan")], dimensions=1)
 
 
+def test_database_url_rejects_embedded_password_without_echoing_it() -> None:
+    marker = "integration-secret-marker"
+    connection_strings = (
+        f"postgresql://wozto:{marker}@127.0.0.1:55432/wozto_rag",
+        f"host=127.0.0.1 dbname=wozto_rag user=wozto password={marker}",
+    )
+    for connection_string in connection_strings:
+        with pytest.raises(ValueError, match="passfile") as exc_info:
+            PgVectorStore(
+                database_url=connection_string,
+                embeddings=HashEmbeddingProvider(dimensions=16),
+            )
+        assert marker not in str(exc_info.value)
+
+
 def test_replace_source_deletes_old_chunks_before_inserting_new_batch() -> None:
     connection = FakeConnection()
     store = PgVectorStore(

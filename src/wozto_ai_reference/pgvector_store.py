@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Protocol
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 from psycopg.sql import SQL, Literal
 
@@ -89,6 +90,14 @@ class PgVectorStore:
     ) -> None:
         if not database_url.strip():
             raise ValueError("database_url must not be empty")
+        try:
+            connection_parameters = conninfo_to_dict(database_url)
+        except psycopg.Error:
+            raise ValueError("database_url must be valid libpq connection information") from None
+        if connection_parameters.get("password"):
+            raise ValueError(
+                "database_url must not embed a password; use a libpq passfile outside the repo"
+            )
         if not 0.0 <= vector_weight <= 1.0:
             raise ValueError("vector_weight must be between 0 and 1")
         if text_search_config not in ALLOWED_TEXT_SEARCH_CONFIGS:

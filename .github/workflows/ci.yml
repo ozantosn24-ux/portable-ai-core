@@ -62,11 +62,16 @@ jobs:
           python -m pip install --require-hashes -r requirements.lock
           python -m pip install --no-deps -e .
 
+      - name: Configure test-only libpq passfile
+        run: |
+          printf '%s\n' '127.0.0.1:5432:wozto_ref:wozto_ref:dummy-ci-pgvector-pw' > /tmp/wozto-pgpass
+          chmod 600 /tmp/wozto-pgpass
+
       - name: Postgres GERCEKTEN hazir mi + pgvector eklentisi VAR mi
         # `services` health-check yesil demek baglanabildigim anlamina gelmez;
         # ayrica eklentinin KURULABILIR oldugunu gormek gerek.
         env:
-          PGPASSWORD: dummy-ci-pgvector-pw
+          PGPASSFILE: /tmp/wozto-pgpass
         run: |
           psql -h 127.0.0.1 -U wozto_ref -d wozto_ref -tAc "select version()" | head -1
           psql -h 127.0.0.1 -U wozto_ref -d wozto_ref -tAc \
@@ -76,7 +81,7 @@ jobs:
 
       - name: KAPI - test ATLANMADI mi (asil ariza buydu)
         env:
-          WOZTO_REFERENCE_TEST_DATABASE_URL: postgresql://wozto_ref:dummy-ci-pgvector-pw@127.0.0.1:5432/wozto_ref
+          WOZTO_REFERENCE_TEST_DATABASE_URL: host=127.0.0.1 port=5432 dbname=wozto_ref user=wozto_ref passfile=/tmp/wozto-pgpass
         # pytest'in exit 0'i YETMEZ: test SKIP edilse de exit 0 gelir ve job yesil
         # kalir - yani duzeltmek icin yazdigimiz job, duzeltmedigini gizleyebilirdi.
         run: |
@@ -153,9 +158,14 @@ jobs:
           python -m pip install "torch>=2.4,<3" "transformers>=4.44,<6" \
             --extra-index-url https://download.pytorch.org/whl/cpu
 
+      - name: Configure test-only libpq passfile
+        run: |
+          printf '%s\n' '127.0.0.1:5432:wozto_ref:wozto_ref:dummy-ci-pgvector-pw' > /tmp/wozto-pgpass
+          chmod 600 /tmp/wozto-pgpass
+
       - name: DENEY - gercek Postgres + gercek e5
         env:
-          DB: postgresql://wozto_ref:dummy-ci-pgvector-pw@127.0.0.1:5432/wozto_ref
+          DB: host=127.0.0.1 port=5432 dbname=wozto_ref user=wozto_ref passfile=/tmp/wozto-pgpass
         run: |
           set -o pipefail
           python scripts/run_hybrid_experiment.py \

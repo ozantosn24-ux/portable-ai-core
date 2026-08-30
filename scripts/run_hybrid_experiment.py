@@ -24,13 +24,12 @@ Korpus **BİR KEZ** gömülür; ağırlık taraması aynı veriyi kullanır. Aks
 Kullanım:
     python scripts/run_hybrid_experiment.py --data data/xquad-tr --embeddings hash --provider memory
     python scripts/run_hybrid_experiment.py --data data/xquad-tr --embeddings e5 \\
-        --provider pgvector --database-url postgresql://... --out results/xquad-tr.json
+        --provider pgvector --database-url "host=... passfile=..." --out results/xquad-tr.json
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import hashlib
 import json
 import subprocess
@@ -40,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from wozto_ai_reference.asyncio_compat import run as run_async  # noqa: E402
 from wozto_ai_reference.comparison import sweep  # noqa: E402
 from wozto_ai_reference.domain import Document, Principal  # noqa: E402
 from wozto_ai_reference.embedding import (  # noqa: E402
@@ -271,7 +271,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    return asyncio.run(_run(_parser().parse_args()))
+    return run_async(_run(_parser().parse_args()))
 
 
 if __name__ == "__main__":

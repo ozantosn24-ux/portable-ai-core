@@ -1,11 +1,11 @@
 """Opt-in local database test; skipped unless the operator provides a test URL."""
 
-import asyncio
 import os
 from uuid import uuid4
 
 import pytest
 
+from wozto_ai_reference.asyncio_compat import run as run_async
 from wozto_ai_reference.domain import Document, Principal
 from wozto_ai_reference.embedding import HashEmbeddingProvider
 from wozto_ai_reference.pgvector_store import EmbeddingSpaceMismatch, PgVectorStore
@@ -54,7 +54,7 @@ def test_pgvector_round_trip_enforces_tenant_and_acl() -> None:
         assert [hit.document.document_id for hit in authorized] == ["policy::0001"]
         await store.delete(tenant_id=tenant, document_id="policy::0001", version="v1")
 
-    asyncio.run(scenario())
+    run_async(scenario())
 
 
 @pytest.mark.skipif(not DATABASE_URL, reason="WOZTO_REFERENCE_TEST_DATABASE_URL is not set")
@@ -171,7 +171,7 @@ def test_hybrid_legs_and_weights_reach_postgres() -> None:
         for doc_id in ("hybrid::both", "hybrid::refund-only", "hybrid::receipt"):
             await base.delete(tenant_id=tenant, document_id=doc_id, version="v1")
 
-    asyncio.run(scenario())
+    run_async(scenario())
 
 
 @pytest.mark.skipif(not DATABASE_URL, reason="WOZTO_REFERENCE_TEST_DATABASE_URL is not set")
@@ -232,4 +232,4 @@ def test_embedding_space_mismatch_raises_instead_of_returning_empty() -> None:
 
         await eski.delete(tenant_id=tenant, document_id="space::0001", version="v1")
 
-    asyncio.run(scenario())
+    run_async(scenario())

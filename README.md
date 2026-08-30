@@ -15,7 +15,8 @@ canlı bulut kaynağı, gerçek müşteri verisi veya ücretli model kullanmaz. 
 - Güvensiz local header identity varsayılan olarak kapalıdır.
 - Manifest dışında kalan belge okunmaz; path escape ve symlink kaynakları reddedilir.
 - Chunk kimliği, belge sürümü ve content hash deterministiktir.
-- PostgreSQL sorgusu tenant ve ACL filtresini retrieval öncesinde uygular.
+- PostgreSQL sorgusu tenant ve ACL filtresini retrieval öncesinde uygular; bu yol
+  Windows Docker Desktop üzerinde gerçek pgvector container'ına karşı da doğrulandı.
 - Gold set kapısı Recall@K, MRR, yetkisiz sonuç ve yinelenen vaka kimliğini ölçer.
 
 Bu checkpoint production identity veya Azure deneyimi iddia etmez. Yerel hash
@@ -41,7 +42,7 @@ dosyasına bakın.
 ## Yerel çalıştırma
 
 ```powershell
-cd reference-implementations/portable-ai-core
+cd portable-ai-core
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
@@ -92,16 +93,18 @@ kontrol edilmelidir.
 ## İsteğe bağlı PostgreSQL + pgvector
 
 Compose tanımı resmi `pgvector/pgvector` image'ını sabit sürüm etiketiyle kullanır ve
-yalnız `127.0.0.1:55432` üzerinde yayınlar. Bu makinede Docker henüz kurulu olmadığı
-için gerçek container entegrasyonu bu checkpoint'te çalıştırılmadı; SQL ve transaction
-davranışı birim testlidir.
+yalnız `127.0.0.1:55432` üzerinde yayınlar. PostgreSQL parolası container environment'ına
+konmaz; Compose, repo dışındaki parola-dosyasını `/run/secrets/postgres_password` olarak
+mount eder. Uygulama bağlantısı da parolayı URL'ye gömmek yerine libpq `passfile` kullanır.
 
 ```powershell
-# Değeri terminalde yerel olarak belirle; dosyaya/commit'e yazma.
-$env:WOZTO_RAG_DB_PASSWORD="<yerel-guclu-parola>"
-docker compose up -d
+# İki dosyayı repo dışında, yalnız kendi kullanıcının okuyabildiği bir konumda oluştur:
+# 1) postgres-password.txt -> yalnız güçlü parola
+# 2) pgpass.conf -> 127.0.0.1:55432:wozto_rag:wozto:<aynı-parola>
+$env:WOZTO_RAG_DB_PASSWORD_FILE="C:\guvenli\postgres-password.txt"
+docker compose up -d --wait
 
-$env:WOZTO_REFERENCE_DATABASE_URL="postgresql://wozto:<url-encoded-parola>@127.0.0.1:55432/wozto_rag"
+$env:WOZTO_REFERENCE_DATABASE_URL="host=127.0.0.1 port=55432 dbname=wozto_rag user=wozto passfile=C:/guvenli/pgpass.conf"
 $env:WOZTO_REFERENCE_BACKEND="pgvector"
 $env:WOZTO_REFERENCE_ALLOW_INSECURE_HEADERS="1"
 
@@ -116,6 +119,24 @@ uvicorn wozto_ai_reference.api:app --port 8080
 `WOZTO_REFERENCE_BACKEND=pgvector` seçilmişken database URL yoksa uygulama açılmaz.
 Ingest her kaynak belgeyi transaction içinde tamamen değiştirir; eski sürümden kalan
 chunk'lar böylece sorgulanmaya devam etmez.
+
+`tests/fixtures/` altındaki parola ve passfile yalnız herkese açık, geçici entegrasyon
+fixture'ıdır; kalıcı volume veya gerçek veriyle kullanılmaz. 30 Ağustos 2026'da Windows
+Docker Desktop 4.88.1 / Engine 29.7.2 ve `pgvector/pgvector:0.8.6-pg17-trixie` üzerinde:
+
+- container healthcheck geçti;
+- gerçek PostgreSQL entegrasyon takımı `3 passed` verdi;
+- XQuAD-TR'nin 240 belgesi ve 150 sorgusunda, 20 warm-up sonrası hash embedding + yerel
+  hibrit SQL + sonuç eşleme gecikmesi p50 `31,179 ms`, p95 `90,010 ms` ölçüldü;
+- boş sonuç `0/150`; bu ölçüm E5/model latency'si, semantic kalite veya production ölçeği
+  iddiası değildir.
+
+Tekrarlanabilir latency probu:
+
+```powershell
+$env:WOZTO_REFERENCE_DATABASE_URL="host=127.0.0.1 port=55432 dbname=wozto_rag user=wozto passfile=C:/guvenli/pgpass.conf"
+python scripts/benchmark_pgvector_latency.py --data data/xquad-tr
+```
 
 ## MCP sunucusu — yetki sınırını protokole taşımak
 
@@ -190,7 +211,8 @@ ruff check .
 1. Operatörce seçilmiş güvenli Vault alt kümesiyle 30–50 soruluk gerçek gold set.
 2. Yerel production adayı embedding modeli ve keyword/vector/hybrid karşılaştırması.
 3. Groundedness critic ve cevap düzeyi hallucination ölçümü.
-4. Docker kurulduğunda gerçek pgvector entegrasyon testi ve latency ölçümü.
+4. Exact-search ground truth'a karşı HNSW/IVFFlat top-k overlap, p50/p95 latency,
+   build-time ve memory karşılaştırması.
 5. Sonuç kanıtı oluşunca Azure AI Search ve Foundry adapter'ları.
 6. Ücretli Azure resource açılmadan önce maliyet, bölge ve cleanup planı için
    eyleme özel operatör onayı.

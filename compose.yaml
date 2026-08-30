@@ -4,7 +4,9 @@ services:
     environment:
       POSTGRES_DB: wozto_rag
       POSTGRES_USER: wozto
-      POSTGRES_PASSWORD: ${WOZTO_RAG_DB_PASSWORD:?WOZTO_RAG_DB_PASSWORD must be set}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     ports:
       - "127.0.0.1:55432:5432"
     volumes:
@@ -18,3 +20,7 @@ services:
 
 volumes:
   portable-rag-data:
+
+secrets:
+  postgres_password:
+    file: ${WOZTO_RAG_DB_PASSWORD_FILE:?WOZTO_RAG_DB_PASSWORD_FILE must point to a password-only file}
