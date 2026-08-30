@@ -71,16 +71,17 @@ def test_schema_has_empty_array_default_and_vector_dimensions():
     assert "vector(64)" in create, "embedding boyutu SQL'e geçmemiş"
 
 
-def test_extension_and_indexes_are_created():
-    """`initialize()` şemanın TAMAMINI kurmalı — eklenti + üç indeks."""
+def test_extension_and_exact_search_indexes_are_created_without_an_ann_index():
+    """Küçük korpusta exact varsayılandır; yalnız filtre/lexical indeksleri kurulur."""
     joined = "\n".join(_render())
     for beklenen in (
         "CREATE EXTENSION IF NOT EXISTS vector",
         "rag_documents_tenant_source_idx",
         "USING gin (search_tsv)",
-        "USING hnsw (embedding vector_cosine_ops)",
     ):
         assert beklenen in joined, f"eksik: {beklenen}"
+    assert "USING hnsw" not in joined
+    assert "USING ivfflat" not in joined
 
 
 def test_schema_records_the_embedding_space():

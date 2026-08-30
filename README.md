@@ -138,6 +138,42 @@ $env:WOZTO_REFERENCE_DATABASE_URL="host=127.0.0.1 port=55432 dbname=wozto_rag us
 python scripts/benchmark_pgvector_latency.py --data data/xquad-tr
 ```
 
+### Exact search / HNSW / IVFFlat kararı
+
+30 Ağustos 2026'da aynı deterministic 64-boyutlu 10.000 vektör ve her filtre diliminde
+60 sabit sorgu üzerinde exact top-k ground truth üretildi. ANN sorgularının gerçekten
+beklenen index planını kullandığı `EXPLAIN (FORMAT JSON)` ile kapılandı. Değerler
+`p50 / p95 ms · ortalama top-5 overlap` biçimindedir:
+
+| Yetkili aday dilimi | Exact | HNSW | IVFFlat |
+| --- | ---: | ---: | ---: |
+| 10.000 satır (%100) | `3,098 / 3,779 · 1,0000` | `1,945 / 2,509 · 0,9933` | `1,802 / 2,162 · 0,7333` |
+| 1.000 satır (%10) | `2,184 / 2,958 · 1,0000` | `2,310 / 3,550 · 0,9567` | `1,873 / 2,497 · 0,7200` |
+| 100 satır (%1) | `1,911 / 2,547 · 1,0000` | `4,862 / 6,582 · 0,9767` | `2,022 / 2,674 · 0,6467` |
+
+HNSW build süresi `2,753 saniye`, index boyutu `5.701.632 byte`; IVFFlat build süresi
+`0,183 saniye`, index boyutu `2.883.584 byte` ölçüldü. Shared-buffer residency ayrıca
+raporlanır; bu değer peak build memory değildir. Tam makine-okunur kanıt
+[`results/pgvector-index-benchmark-2026-08-30.json`](results/pgvector-index-benchmark-2026-08-30.json)
+içindedir.
+
+Karar: mevcut pilot 20–240 belge ve seçici tenant/ACL filtreleriyle çalıştığı için
+exact search varsayılandır; şema otomatik ANN index oluşturmaz. HNSW ancak gerçek
+korpus büyüyüp bu benchmarkta kabul edilen recall ile ölçülmüş bir darboğaz gösterirse
+eklenir. IVFFlat bu ayarlarda recall kaybı nedeniyle seçilmedi. Bu benchmark semantic
+arama kalitesi iddiası değildir; yalnız vektör index mekaniğini ölçer. Mevcut hibrit
+SQL de yetkili aday kümesinin tamamında skor normalizasyonu yaptığı için ANN indexi
+doğrudan kullanmaz; ANN'e geçiş iki aşamalı candidate/fusion tasarımı gerektirir.
+
+Tekrarlanabilir karşılaştırma (geçici tablo koşu sonunda otomatik silinir):
+
+```powershell
+$env:WOZTO_REFERENCE_DATABASE_URL="host=127.0.0.1 port=55432 dbname=wozto_rag user=wozto passfile=C:/guvenli/pgpass.conf"
+python scripts/benchmark_pgvector_indexes.py `
+  --rows 10000 --queries 60 --warmup 10 --top-k 5 `
+  --output results/pgvector-index-benchmark.json
+```
+
 ## MCP sunucusu — yetki sınırını protokole taşımak
 
 `wozto_ai_reference.mcp_server`, aynı tenant+ACL filtreli sorgu servisini **stdio MCP
@@ -211,8 +247,8 @@ ruff check .
 1. Operatörce seçilmiş güvenli Vault alt kümesiyle 30–50 soruluk gerçek gold set.
 2. Yerel production adayı embedding modeli ve keyword/vector/hybrid karşılaştırması.
 3. Groundedness critic ve cevap düzeyi hallucination ölçümü.
-4. Exact-search ground truth'a karşı HNSW/IVFFlat top-k overlap, p50/p95 latency,
-   build-time ve memory karşılaştırması.
+4. Korpus 10.000 satıra yaklaşır veya exact p95 hedefi aşarsa ölçülmüş HNSW ayarını
+   gerçek tenant/ACL dağılımında yeniden doğrulama; IVFFlat şimdilik seçilmedi.
 5. Sonuç kanıtı oluşunca Azure AI Search ve Foundry adapter'ları.
 6. Ücretli Azure resource açılmadan önce maliyet, bölge ve cleanup planı için
    eyleme özel operatör onayı.

@@ -192,10 +192,6 @@ class PgVectorStore:
                     "CREATE INDEX IF NOT EXISTS rag_documents_search_idx "
                     "ON rag_documents USING gin (search_tsv)"
                 )
-                await connection.execute(
-                    "CREATE INDEX IF NOT EXISTS rag_documents_embedding_hnsw_idx "
-                    "ON rag_documents USING hnsw (embedding vector_cosine_ops)"
-                )
 
     async def upsert(self, document: Document) -> None:
         vectors = await self._embeddings.embed([indexed_text(document)])
