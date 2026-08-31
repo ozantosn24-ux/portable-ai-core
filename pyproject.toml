@@ -24,6 +24,7 @@ dependencies = [
 [project.scripts]
 wozto-rag-ingest = "wozto_ai_reference.ingest:main"
 wozto-rag-eval = "wozto_ai_reference.evaluation:main"
+wozto-rag-quality-eval = "wozto_ai_reference.quality_evaluation:main"
 wozto-rag-mcp = "wozto_ai_reference.mcp_server:run"
 
 [project.optional-dependencies]

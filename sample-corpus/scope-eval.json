@@ -1,0 +1,39 @@
+{
+  "schema_version": "wozto-scope-eval/v1",
+  "rules": [
+    {
+      "phrase": "current",
+      "constraints": {
+        "source_status": "current"
+      }
+    },
+    {
+      "phrase": "approved",
+      "constraints": {
+        "source_authority": "authoritative"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "current-approved",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "eval-user"
+      },
+      "query": "What is the current approved refund policy?",
+      "expected_constraints": {
+        "source_status": "current",
+        "source_authority": "authoritative"
+      }
+    },
+    {
+      "case_id": "historical-unconstrained",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "eval-user"
+      },
+      "query": "What approach was proposed in the archive?"
+    }
+  ]
+}

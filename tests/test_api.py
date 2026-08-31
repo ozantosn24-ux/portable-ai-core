@@ -85,6 +85,21 @@ def test_query_rejects_unknown_source_constraint_values() -> None:
     assert response.status_code == 422
 
 
+def test_query_refuses_identity_smuggling_in_request_body() -> None:
+    client = TestClient(create_app(allow_insecure_identity=True))
+
+    response = client.post(
+        "/query",
+        headers={"X-Tenant-ID": "tenant-demo", "X-User-ID": "local-operator"},
+        json={
+            "query": "refund policy",
+            "tenant_id": "tenant-other",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_unknown_backend_fails_closed(monkeypatch) -> None:
     monkeypatch.setenv("WOZTO_REFERENCE_BACKEND", "unknown")
 

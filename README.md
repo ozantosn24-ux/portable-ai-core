@@ -12,6 +12,10 @@ canlı bulut kaynağı, gerçek müşteri verisi veya ücretli model kullanmaz. 
 - Retrieval hem adapter içinde hem servis katmanında tenant ve ACL kontrolünden geçer.
 - Operatörce yapılandırılan hard query policy, reddedilen isteği retrieval ve modelden önce keser.
 - `as_of`, kaynak durumu ve kaynak otoritesi koşulları belge metadata'sıyla fail-closed eşleşir.
+- Opt-in scope resolver, doğal dil işaretlerini yalnız önceden incelenmiş daraltıcı
+  kurallara çevirir; resolver ile açık istek koşulu çelişirse search başlamaz.
+- Opt-in evidence critic, model cevabını citation üretmeden önce kontrol eder; exact
+  baseline yalnız birebir extractive desteği kabul eder ve semantik judge iddiası taşımaz.
 - Yetkili kaynak bulunmazsa sistem cevap uydurmak yerine abstain eder.
 - Model yalnız yetki kontrolünden geçmiş context'i görür.
 - Güvensiz local header identity varsayılan olarak kapalıdır.
@@ -32,9 +36,11 @@ FastAPI
   └─ QueryService
       ├─ IdentityProvider ─ local headers / Entra ID / Keycloak
       ├─ QueryPolicy      ─ operator-configured hard deny / future policy engine
+      ├─ QueryScopeResolver─ configured phrases / calibrated classifier
       ├─ SearchProvider   ─ in-memory / pgvector / Azure AI Search
       ├─ EmbeddingProvider─ deterministic hash / local model / cloud embedding
       ├─ ModelProvider    ─ deterministic / Foundry / OpenAI / local model
+      ├─ EvidenceSupportCritic─ exact extractive / calibrated entailment
       ├─ DocumentStore    ─ memory / Blob / S3-MinIO
       └─ TelemetryProvider─ memory / OpenTelemetry / Azure Monitor
 ```
@@ -79,11 +85,39 @@ Bu bayrak kapalıyken `/query` fail-closed olarak `503` döner.
 }
 ```
 
-Çekirdek doğal dildeki tarihi veya "güncel/onaylı" niyetini kendiliğinden doğru kabul
-etmez; bu alanlar güvenilir çağıran/policy katmanında çözülür. `as_of` verildiğinde hiç
-validity metadata'sı olmayan kaynak fail-closed elenir. `DenyPhraseQueryPolicy` ise
-credential/PII gibi operatörün belirlediği ifadeleri search ve model çağrısından önce
-reddeden opt-in bir hard-policy adapter'ıdır; varsayılan gizli kelime listesi yoktur.
+Çekirdek varsayılan olarak doğal dildeki tarihi veya "güncel/onaylı" niyetini
+kendi kendine doğru kabul etmez. Opt-in `ConfiguredPhraseScopeResolver`, yalnız
+operatörün açıkça tanımladığı phrase → constraint kurallarını birleştirir; çelişen
+kurallar veya resolver ile açık request alanı çatışması fail-closed abstain olur.
+Bu baseline normalize edilmiş token-sequence eşleşmesidir, genel amaçlı doğal dil
+anlayışı değildir.
+`as_of` verildiğinde hiç validity metadata'sı olmayan kaynak fail-closed elenir.
+`DenyPhraseQueryPolicy` ise credential/PII gibi operatörün belirlediği ifadeleri search
+ve model çağrısından önce reddeden opt-in bir hard-policy adapter'ıdır; varsayılan gizli
+kelime listesi yoktur.
+
+Model üretiminden sonra opt-in `ExactEvidenceSupportCritic`, cevabın normalize edilmiş
+halini yetkili evidence ile birebir karşılaştırır. Destek yoksa üretilen metni ve
+citation'ları kullanıcıya göstermeden abstain eder; destek varsa yalnız destekleyen
+document id'lerinin citation'larını döndürür. Bu deterministik baseline paraphrase veya
+entailment değerlendirmez; production groundedness critic yerine geçmez.
+
+Resolver ve critic retrieval'dan ayrı frozen vakalarla ölçülür:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 scope `
+  --rules sample-corpus/scope-eval.json `
+  --cases sample-corpus/scope-eval.json
+
+python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 critic `
+  --cases sample-corpus/critic-eval.json `
+  --allowed-prefix "Grounded answer:"
+```
+
+Her iki kapı da false allow/accept, false refusal/reject, constraint/support mismatch ve
+duplicate vaka kimliklerini ayrıca raporlar. Örnekler sentetik mekanizma testidir; insan
+etiketli domain calibration veya production kalite iddiası değildir.
 
 ## Güvenli ingest ve retrieval ölçümü
 
@@ -299,7 +333,8 @@ ruff check .
 
 1. Operatörce seçilmiş güvenli Vault alt kümesiyle 30–50 soruluk gerçek gold set.
 2. Yerel production adayı embedding modeli ve keyword/vector/hybrid karşılaştırması.
-3. Groundedness critic ve cevap düzeyi hallucination ölçümü.
+3. Exact baseline'ın ötesinde insan-kalibreli semantic entailment critic ve cevap düzeyi
+   hallucination ölçümü.
 4. Korpus 10.000 satıra yaklaşır veya exact p95 hedefi aşarsa ölçülmüş HNSW ayarını
    gerçek tenant/ACL dağılımında yeniden doğrulama; IVFFlat şimdilik seçilmedi.
 5. Sonuç kanıtı oluşunca Azure AI Search ve Foundry adapter'ları.

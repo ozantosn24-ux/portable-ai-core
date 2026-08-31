@@ -10,13 +10,22 @@ from .domain import (
     Citation,
     Document,
     Principal,
+    QueryConstraints,
     QueryResult,
     RetrievalHit,
     SourceAuthority,
     SourceStatus,
     TelemetryEvent,
+    evidence_reference,
 )
-from .ports import ModelProvider, QueryPolicy, SearchProvider, TelemetryProvider
+from .ports import (
+    EvidenceSupportCritic,
+    ModelProvider,
+    QueryPolicy,
+    QueryScopeResolver,
+    SearchProvider,
+    TelemetryProvider,
+)
 
 _ABSTAIN_MESSAGE = "Yeterli ve yetkili kaynak bulunamadı."
 
@@ -78,6 +87,24 @@ def source_is_eligible(
     return document.valid_through is None or as_of <= document.valid_through
 
 
+def merge_query_constraints(
+    explicit: QueryConstraints,
+    resolved: QueryConstraints,
+) -> QueryConstraints | None:
+    """Merge narrowing constraints; disagreement is an unsafe ambiguity."""
+
+    merged: dict[str, object] = {}
+    for field_name in ("as_of", "source_status", "source_authority"):
+        explicit_value = getattr(explicit, field_name)
+        resolved_value = getattr(resolved, field_name)
+        if explicit_value is not None and resolved_value is not None and explicit_value != resolved_value:
+            return None
+        value = resolved_value if resolved_value is not None else explicit_value
+        if value is not None:
+            merged[field_name] = value
+    return QueryConstraints(**merged)
+
+
 class QueryService:
     def __init__(
         self,
@@ -87,6 +114,8 @@ class QueryService:
         telemetry: TelemetryProvider,
         minimum_score: float = 0.01,
         query_policy: QueryPolicy | None = None,
+        scope_resolver: QueryScopeResolver | None = None,
+        evidence_critic: EvidenceSupportCritic | None = None,
     ) -> None:
         if not math.isfinite(minimum_score) or minimum_score < 0.0:
             raise ValueError("minimum_score must be a finite non-negative number")
@@ -95,6 +124,8 @@ class QueryService:
         self._telemetry = telemetry
         self._minimum_score = minimum_score
         self._query_policy = query_policy
+        self._scope_resolver = scope_resolver
+        self._evidence_critic = evidence_critic
 
     async def query(
         self,
@@ -131,6 +162,42 @@ class QueryService:
                     trace_id=trace_id,
                 )
 
+        constraints = QueryConstraints(
+            as_of=as_of,
+            source_status=source_status,
+            source_authority=source_authority,
+        )
+        if self._scope_resolver is not None:
+            scope = await self._scope_resolver.resolve(principal=principal, query=clean_query)
+            if not scope.allowed:
+                self._record(
+                    "query.abstained",
+                    trace_id,
+                    principal,
+                    {"reason": "scope_resolution", "scope_reason": scope.reason},
+                )
+                return QueryResult(
+                    answer=_ABSTAIN_MESSAGE,
+                    citations=[],
+                    abstained=True,
+                    trace_id=trace_id,
+                )
+            merged_constraints = merge_query_constraints(constraints, scope.constraints)
+            if merged_constraints is None:
+                self._record(
+                    "query.abstained",
+                    trace_id,
+                    principal,
+                    {"reason": "scope_constraint_conflict"},
+                )
+                return QueryResult(
+                    answer=_ABSTAIN_MESSAGE,
+                    citations=[],
+                    abstained=True,
+                    trace_id=trace_id,
+                )
+            constraints = merged_constraints
+
         provider_hits = await self._search.search(
             principal=principal,
             query=clean_query,
@@ -141,9 +208,9 @@ class QueryService:
             hits=provider_hits,
             minimum_score=self._minimum_score,
             limit=limit,
-            as_of=as_of,
-            source_status=source_status,
-            source_authority=source_authority,
+            as_of=constraints.as_of,
+            source_status=constraints.source_status,
+            source_authority=constraints.source_authority,
         )
 
         if not authorized_hits:
@@ -156,7 +223,34 @@ class QueryService:
             )
 
         answer = await self._model.generate(query=clean_query, hits=authorized_hits, trace_id=trace_id)
-        citations = [self._citation(hit) for hit in authorized_hits]
+        citation_hits = authorized_hits
+        if self._evidence_critic is not None:
+            support = await self._evidence_critic.evaluate(
+                principal=principal,
+                query=clean_query,
+                answer=answer,
+                hits=authorized_hits,
+            )
+            authorized_evidence = {evidence_reference(hit.document) for hit in authorized_hits}
+            if not support.supported or not support.supporting_evidence.issubset(authorized_evidence):
+                reason = support.reason if not support.supported else "critic_invalid_support"
+                self._record(
+                    "query.abstained",
+                    trace_id,
+                    principal,
+                    {"reason": "evidence_support", "critic_reason": reason},
+                )
+                return QueryResult(
+                    answer=_ABSTAIN_MESSAGE,
+                    citations=[],
+                    abstained=True,
+                    trace_id=trace_id,
+                )
+            citation_hits = [
+                hit for hit in authorized_hits if evidence_reference(hit.document) in support.supporting_evidence
+            ]
+
+        citations = [self._citation(hit) for hit in citation_hits]
         self._record(
             "query.completed",
             trace_id,

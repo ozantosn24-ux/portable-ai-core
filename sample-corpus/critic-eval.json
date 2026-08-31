@@ -1,0 +1,96 @@
+{
+  "schema_version": "wozto-evidence-critic-eval/v1",
+  "cases": [
+    {
+      "case_id": "exact-supported",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "eval-user"
+      },
+      "query": "How are refund requests handled?",
+      "answer": "Grounded answer: Refund requests require human review.",
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "refund-policy::0001",
+            "version": "v1",
+            "title": "Refund Policy",
+            "section": "Eligibility",
+            "source_uri": "memory://tenant-demo/refund-policy#eligibility",
+            "content": "Refund requests require human review.",
+            "content_hash": "sha256:demo-refund-v1",
+            "acl_roles": [],
+            "source_status": "reference",
+            "source_authority": "authoritative"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": true,
+      "expected_supporting_evidence": [
+        {
+          "document_id": "refund-policy::0001",
+          "version": "v1",
+          "content_hash": "sha256:demo-refund-v1"
+        }
+      ]
+    },
+    {
+      "case_id": "unsupported-claim",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "eval-user"
+      },
+      "query": "How are refund requests handled?",
+      "answer": "Refund requests are always approved automatically.",
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "refund-policy::0001",
+            "version": "v1",
+            "title": "Refund Policy",
+            "section": "Eligibility",
+            "source_uri": "memory://tenant-demo/refund-policy#eligibility",
+            "content": "Refund requests require human review.",
+            "content_hash": "sha256:demo-refund-v1",
+            "acl_roles": [],
+            "source_status": "reference",
+            "source_authority": "authoritative"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": false
+    },
+    {
+      "case_id": "cross-tenant-evidence",
+      "principal": {
+        "tenant_id": "tenant-demo",
+        "user_id": "eval-user"
+      },
+      "query": "How are refund requests handled?",
+      "answer": "Refund requests require human review.",
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-other",
+            "document_id": "foreign-policy::0001",
+            "version": "v1",
+            "title": "Foreign Policy",
+            "section": "Restricted",
+            "source_uri": "memory://tenant-other/foreign-policy#restricted",
+            "content": "Refund requests require human review.",
+            "content_hash": "sha256:demo-foreign-v1",
+            "acl_roles": [],
+            "source_status": "reference",
+            "source_authority": "authoritative"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": false
+    }
+  ]
+}

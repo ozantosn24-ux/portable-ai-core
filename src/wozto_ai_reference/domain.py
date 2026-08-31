@@ -8,10 +8,12 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NonEmptyText = Annotated[str, Field(min_length=1)]
-PolicyReasonCode = Annotated[
+DecisionReasonCode = Annotated[
     str,
     Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_.-]*$"),
 ]
+# Backward-compatible public name from the first hard-policy checkpoint.
+PolicyReasonCode = DecisionReasonCode
 SourceStatus = Literal["unspecified", "current", "historical", "reference"]
 SourceAuthority = Literal["unspecified", "advisory", "authoritative"]
 
@@ -61,6 +63,24 @@ class RetrievalHit(BaseModel):
     score: float = Field(ge=0.0)
 
 
+class EvidenceReference(BaseModel):
+    """Version- and content-bound identity used by a post-generation critic."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True, extra="forbid")
+
+    document_id: NonEmptyText
+    version: NonEmptyText
+    content_hash: NonEmptyText
+
+
+def evidence_reference(document: Document) -> EvidenceReference:
+    return EvidenceReference(
+        document_id=document.document_id,
+        version=document.version,
+        content_hash=document.content_hash,
+    )
+
+
 class Citation(BaseModel):
     """Provenance emitted to the caller for an authorized retrieval hit."""
 
@@ -82,7 +102,7 @@ class Citation(BaseModel):
 class QueryPayload(BaseModel):
     """HTTP request body; identity is resolved outside this payload."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     query: NonEmptyText
     top_k: int = Field(default=5, ge=1, le=20)
@@ -91,15 +111,63 @@ class QueryPayload(BaseModel):
     source_authority: SourceAuthority | None = None
 
 
+class QueryConstraints(BaseModel):
+    """Caller- or resolver-supplied requirements that may only narrow evidence."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    as_of: date | None = None
+    source_status: SourceStatus | None = None
+    source_authority: SourceAuthority | None = None
+
+    @property
+    def constrained(self) -> bool:
+        return any(value is not None for value in (self.as_of, self.source_status, self.source_authority))
+
+
 class QueryPolicyDecision(BaseModel):
     """Fail-closed decision from an operator-configured request policy."""
 
-    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True, extra="forbid")
 
     allowed: bool
     # This value crosses into telemetry. Restrict it to a short machine code so a
     # policy adapter cannot accidentally echo request or credential text.
-    reason: PolicyReasonCode
+    reason: DecisionReasonCode
+
+
+class QueryScopeDecision(BaseModel):
+    """Explainable scope resolution; a refusal carries no usable constraints."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True, extra="forbid")
+
+    allowed: bool
+    reason: DecisionReasonCode
+    constraints: QueryConstraints = Field(default_factory=QueryConstraints)
+
+    @model_validator(mode="after")
+    def refused_scope_has_no_constraints(self) -> QueryScopeDecision:
+        if not self.allowed and self.constraints.constrained:
+            raise ValueError("a refused scope decision must not carry constraints")
+        return self
+
+
+class EvidenceSupportDecision(BaseModel):
+    """Post-generation evidence verdict and the exact documents supporting it."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True, extra="forbid")
+
+    supported: bool
+    reason: DecisionReasonCode
+    supporting_evidence: frozenset[EvidenceReference] = Field(default_factory=frozenset)
+
+    @model_validator(mode="after")
+    def validate_supporting_documents(self) -> EvidenceSupportDecision:
+        if self.supported and not self.supporting_evidence:
+            raise ValueError("a supported answer must identify supporting evidence")
+        if not self.supported and self.supporting_evidence:
+            raise ValueError("an unsupported answer must not identify supporting evidence")
+        return self
 
 
 class QueryResult(BaseModel):
