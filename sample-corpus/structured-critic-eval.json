@@ -1,0 +1,268 @@
+{
+  "schema_version": "wozto-structured-claim-critic-eval/v1",
+  "cases": [
+    {
+      "case_id": "single-exact-extract",
+      "principal": {"tenant_id": "tenant-demo", "user_id": "eval-user"},
+      "query": "How are refund requests handled?",
+      "answer": {
+        "answer": "Refund requests require human review.",
+        "claims": [
+          {
+            "claim_id": "refund-review",
+            "text": "Refund requests require human review.",
+            "supporting_evidence": [
+              {"document_id": "refund-policy::0001", "version": "v1", "content_hash": "sha256:demo-refund-v1"}
+            ]
+          }
+        ]
+      },
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "refund-policy::0001",
+            "version": "v1",
+            "title": "Refund Policy",
+            "section": "Eligibility",
+            "source_uri": "memory://tenant-demo/refund-policy#eligibility",
+            "content": "Refund requests require human review. Decisions are logged.",
+            "content_hash": "sha256:demo-refund-v1",
+            "source_status": "reference",
+            "source_authority": "authoritative"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": true,
+      "expected_supporting_evidence": [
+        {"document_id": "refund-policy::0001", "version": "v1", "content_hash": "sha256:demo-refund-v1"}
+      ]
+    },
+    {
+      "case_id": "partial-extract",
+      "principal": {"tenant_id": "tenant-demo", "user_id": "eval-user"},
+      "query": "Who reviews refunds?",
+      "answer": {
+        "answer": "human review",
+        "claims": [
+          {
+            "claim_id": "review-kind",
+            "text": "human review",
+            "supporting_evidence": [
+              {"document_id": "refund-policy::0001", "version": "v1", "content_hash": "sha256:demo-refund-v1"}
+            ]
+          }
+        ]
+      },
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "refund-policy::0001",
+            "version": "v1",
+            "title": "Refund Policy",
+            "section": "Eligibility",
+            "source_uri": "memory://tenant-demo/refund-policy#eligibility",
+            "content": "Refund requests require human review. Decisions are logged.",
+            "content_hash": "sha256:demo-refund-v1"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": true,
+      "expected_supporting_evidence": [
+        {"document_id": "refund-policy::0001", "version": "v1", "content_hash": "sha256:demo-refund-v1"}
+      ]
+    },
+    {
+      "case_id": "two-claims-two-sources",
+      "principal": {"tenant_id": "tenant-demo", "user_id": "eval-user"},
+      "query": "How are refunds reviewed and logged?",
+      "answer": {
+        "answer": "Refund requests require human review. Audit records are retained for one year.",
+        "claims": [
+          {
+            "claim_id": "refund-review",
+            "text": "Refund requests require human review.",
+            "supporting_evidence": [
+              {"document_id": "refund-policy::0001", "version": "v1", "content_hash": "sha256:demo-refund-v1"}
+            ]
+          },
+          {
+            "claim_id": "audit-retention",
+            "text": "Audit records are retained for one year.",
+            "supporting_evidence": [
+              {"document_id": "audit-policy::0001", "version": "v1", "content_hash": "sha256:demo-audit-v1"}
+            ]
+          }
+        ]
+      },
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "refund-policy::0001",
+            "version": "v1",
+            "title": "Refund Policy",
+            "section": "Eligibility",
+            "source_uri": "memory://tenant-demo/refund-policy#eligibility",
+            "content": "Refund requests require human review.",
+            "content_hash": "sha256:demo-refund-v1"
+          },
+          "score": 1.0
+        },
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "audit-policy::0001",
+            "version": "v1",
+            "title": "Audit Policy",
+            "section": "Retention",
+            "source_uri": "memory://tenant-demo/audit-policy#retention",
+            "content": "Audit records are retained for one year.",
+            "content_hash": "sha256:demo-audit-v1"
+          },
+          "score": 0.9
+        }
+      ],
+      "expected_supported": true,
+      "expected_supporting_evidence": [
+        {"document_id": "refund-policy::0001", "version": "v1", "content_hash": "sha256:demo-refund-v1"},
+        {"document_id": "audit-policy::0001", "version": "v1", "content_hash": "sha256:demo-audit-v1"}
+      ]
+    },
+    {
+      "case_id": "unsupported-paraphrase",
+      "principal": {"tenant_id": "tenant-demo", "user_id": "eval-user"},
+      "query": "How are refund requests handled?",
+      "answer": {
+        "answer": "A person must inspect every refund request.",
+        "claims": [
+          {
+            "claim_id": "refund-review",
+            "text": "A person must inspect every refund request.",
+            "supporting_evidence": [
+              {"document_id": "refund-policy::0001", "version": "v1", "content_hash": "sha256:demo-refund-v1"}
+            ]
+          }
+        ]
+      },
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "refund-policy::0001",
+            "version": "v1",
+            "title": "Refund Policy",
+            "section": "Eligibility",
+            "source_uri": "memory://tenant-demo/refund-policy#eligibility",
+            "content": "Refund requests require human review.",
+            "content_hash": "sha256:demo-refund-v1"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": false
+    },
+    {
+      "case_id": "forged-evidence-version",
+      "principal": {"tenant_id": "tenant-demo", "user_id": "eval-user"},
+      "query": "How are refund requests handled?",
+      "answer": {
+        "answer": "Refund requests require human review.",
+        "claims": [
+          {
+            "claim_id": "refund-review",
+            "text": "Refund requests require human review.",
+            "supporting_evidence": [
+              {"document_id": "refund-policy::0001", "version": "v2", "content_hash": "sha256:demo-refund-v2"}
+            ]
+          }
+        ]
+      },
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "refund-policy::0001",
+            "version": "v1",
+            "title": "Refund Policy",
+            "section": "Eligibility",
+            "source_uri": "memory://tenant-demo/refund-policy#eligibility",
+            "content": "Refund requests require human review.",
+            "content_hash": "sha256:demo-refund-v1"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": false
+    },
+    {
+      "case_id": "unclaimed-answer-text",
+      "principal": {"tenant_id": "tenant-demo", "user_id": "eval-user"},
+      "query": "How are refund requests handled?",
+      "answer": {
+        "answer": "Refund requests require human review. Refunds are automatic.",
+        "claims": [
+          {
+            "claim_id": "refund-review",
+            "text": "Refund requests require human review.",
+            "supporting_evidence": [
+              {"document_id": "refund-policy::0001", "version": "v1", "content_hash": "sha256:demo-refund-v1"}
+            ]
+          }
+        ]
+      },
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-demo",
+            "document_id": "refund-policy::0001",
+            "version": "v1",
+            "title": "Refund Policy",
+            "section": "Eligibility",
+            "source_uri": "memory://tenant-demo/refund-policy#eligibility",
+            "content": "Refund requests require human review.",
+            "content_hash": "sha256:demo-refund-v1"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": false
+    },
+    {
+      "case_id": "cross-tenant-evidence",
+      "principal": {"tenant_id": "tenant-demo", "user_id": "eval-user"},
+      "query": "How are refund requests handled?",
+      "answer": {
+        "answer": "Refund requests require human review.",
+        "claims": [
+          {
+            "claim_id": "refund-review",
+            "text": "Refund requests require human review.",
+            "supporting_evidence": [
+              {"document_id": "foreign-policy::0001", "version": "v1", "content_hash": "sha256:demo-foreign-v1"}
+            ]
+          }
+        ]
+      },
+      "hits": [
+        {
+          "document": {
+            "tenant_id": "tenant-other",
+            "document_id": "foreign-policy::0001",
+            "version": "v1",
+            "title": "Foreign Policy",
+            "section": "Restricted",
+            "source_uri": "memory://tenant-other/foreign-policy#restricted",
+            "content": "Refund requests require human review.",
+            "content_hash": "sha256:demo-foreign-v1"
+          },
+          "score": 1.0
+        }
+      ],
+      "expected_supported": false
+    }
+  ]
+}

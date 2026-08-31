@@ -15,6 +15,7 @@ from .domain import (
     RetrievalHit,
     SourceAuthority,
     SourceStatus,
+    StructuredAnswer,
     TelemetryEvent,
     evidence_reference,
 )
@@ -222,13 +223,14 @@ class QueryService:
                 trace_id=trace_id,
             )
 
-        answer = await self._model.generate(query=clean_query, hits=authorized_hits, trace_id=trace_id)
+        generated = await self._model.generate(query=clean_query, hits=authorized_hits, trace_id=trace_id)
+        answer = generated.answer if isinstance(generated, StructuredAnswer) else generated
         citation_hits = authorized_hits
         if self._evidence_critic is not None:
             support = await self._evidence_critic.evaluate(
                 principal=principal,
                 query=clean_query,
-                answer=answer,
+                answer=generated,
                 hits=authorized_hits,
             )
             authorized_evidence = {evidence_reference(hit.document) for hit in authorized_hits}

@@ -8,6 +8,7 @@ import pytest
 from wozto_ai_reference.adapters import (
     ConfiguredPhraseScopeResolver,
     ExactEvidenceSupportCritic,
+    ExactStructuredClaimSupportCritic,
     PhraseScopeRule,
 )
 from wozto_ai_reference.domain import (
@@ -18,17 +19,24 @@ from wozto_ai_reference.domain import (
     QueryConstraints,
     QueryScopeDecision,
     RetrievalHit,
+    StructuredAnswer,
+    StructuredClaim,
+    evidence_reference,
 )
 from wozto_ai_reference.quality_evaluation import (
     CRITIC_EVAL_SCHEMA,
     SCOPE_EVAL_SCHEMA,
+    STRUCTURED_CRITIC_EVAL_SCHEMA,
     CriticEvalCase,
     ScopeEvalCase,
+    StructuredCriticEvalCase,
     evaluate_evidence_critic,
     evaluate_scope_resolver,
+    evaluate_structured_claim_critic,
     load_critic_cases,
     load_scope_cases,
     load_scope_rules,
+    load_structured_critic_cases,
 )
 
 
@@ -271,3 +279,89 @@ def test_quality_eval_loader_rejects_non_object_records(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="phrase must be a string"):
         load_scope_rules(path)
+
+
+def test_structured_claim_eval_uses_frozen_evidence_and_detects_false_accepts() -> None:
+    hit = RetrievalHit(document=_document(), score=1.0)
+    reference = evidence_reference(hit.document)
+    supported = StructuredCriticEvalCase(
+        case_id="supported-extract",
+        principal=_principal(),
+        query="What is the refund rule?",
+        answer=StructuredAnswer(
+            answer="Refund requests require human review.",
+            claims=(
+                StructuredClaim(
+                    claim_id="refund-review",
+                    text="Refund requests require human review.",
+                    supporting_evidence=frozenset({reference}),
+                ),
+            ),
+        ),
+        hits=(hit,),
+        expected_supported=True,
+        expected_supporting_evidence=frozenset({reference}),
+    )
+    unrelated_query = supported.model_copy(
+        update={
+            "case_id": "query-irrelevant-extract",
+            "query": "What is the approved advertising budget?",
+            "expected_supported": False,
+            "expected_supporting_evidence": frozenset(),
+        }
+    )
+
+    report, results = asyncio.run(
+        evaluate_structured_claim_critic(
+            critic=ExactStructuredClaimSupportCritic(),
+            cases=(supported, unrelated_query),
+        )
+    )
+
+    assert report.accuracy == 0.5
+    assert report.false_accepts == 1
+    assert not report.passes(minimum_accuracy=0.5)
+    assert results[1].false_accept is True
+
+
+def test_structured_claim_eval_loader_has_separate_versioned_schema(tmp_path: Path) -> None:
+    document = _document()
+    reference = evidence_reference(document)
+    path = tmp_path / "structured-critic.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": STRUCTURED_CRITIC_EVAL_SCHEMA,
+                "cases": [
+                    {
+                        "case_id": "supported",
+                        "principal": _principal().model_dump(mode="json"),
+                        "query": "What is the refund rule?",
+                        "answer": {
+                            "answer": document.content,
+                            "claims": [
+                                {
+                                    "claim_id": "refund-review",
+                                    "text": document.content,
+                                    "supporting_evidence": [reference.model_dump(mode="json")],
+                                }
+                            ],
+                        },
+                        "hits": [
+                            {
+                                "document": document.model_dump(mode="json"),
+                                "score": 1.0,
+                            }
+                        ],
+                        "expected_supported": True,
+                        "expected_supporting_evidence": [reference.model_dump(mode="json")],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cases = load_structured_critic_cases(path)
+
+    assert cases[0].answer.claims[0].supporting_evidence == frozenset({reference})

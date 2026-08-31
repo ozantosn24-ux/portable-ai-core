@@ -73,6 +73,35 @@ class EvidenceReference(BaseModel):
     content_hash: NonEmptyText
 
 
+class StructuredClaim(BaseModel):
+    """Atomic model claim with version- and content-bound evidence references."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True, extra="forbid")
+
+    claim_id: DecisionReasonCode
+    text: NonEmptyText
+    supporting_evidence: frozenset[EvidenceReference] = Field(min_length=1)
+
+
+class StructuredAnswer(BaseModel):
+    """Display answer plus the complete set of claims that compose it."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True, extra="forbid")
+
+    answer: NonEmptyText
+    claims: tuple[StructuredClaim, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def claim_ids_are_unique(self) -> StructuredAnswer:
+        claim_ids = [claim.claim_id for claim in self.claims]
+        if len(set(claim_ids)) != len(claim_ids):
+            raise ValueError("structured answer claim ids must be unique")
+        return self
+
+
+type ModelOutput = str | StructuredAnswer
+
+
 def evidence_reference(document: Document) -> EvidenceReference:
     return EvidenceReference(
         document_id=document.document_id,

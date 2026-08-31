@@ -16,6 +16,9 @@ canlı bulut kaynağı, gerçek müşteri verisi veya ücretli model kullanmaz. 
   kurallara çevirir; resolver ile açık istek koşulu çelişirse search başlamaz.
 - Opt-in evidence critic, model cevabını citation üretmeden önce kontrol eder; exact
   baseline yalnız birebir extractive desteği kabul eder ve semantik judge iddiası taşımaz.
+- `StructuredAnswer`, her atomik claim'i kaynak `document_id + version + content_hash`
+  referanslarına bağlar. Opt-in `ExactStructuredClaimSupportCritic`, claim dışı cevap
+  metnini, getirilmeyen referansı ve kaynakta birebir bulunmayan claim'i fail-closed reddeder.
 - Yetkili kaynak bulunmazsa sistem cevap uydurmak yerine abstain eder.
 - Model yalnız yetki kontrolünden geçmiş context'i görür.
 - Güvensiz local header identity varsayılan olarak kapalıdır.
@@ -40,7 +43,7 @@ FastAPI
       ├─ SearchProvider   ─ in-memory / pgvector / Azure AI Search
       ├─ EmbeddingProvider─ deterministic hash / local model / cloud embedding
       ├─ ModelProvider    ─ deterministic / Foundry / OpenAI / local model
-      ├─ EvidenceSupportCritic─ exact extractive / calibrated entailment
+      ├─ EvidenceSupportCritic─ exact answer / structured claims / calibrated entailment
       ├─ DocumentStore    ─ memory / Blob / S3-MinIO
       └─ TelemetryProvider─ memory / OpenTelemetry / Azure Monitor
 ```
@@ -102,6 +105,14 @@ citation'ları kullanıcıya göstermeden abstain eder; destek varsa yalnız des
 document id'lerinin citation'larını döndürür. Bu deterministik baseline paraphrase veya
 entailment değerlendirmez; production groundedness critic yerine geçmez.
 
+Yapılandırılmış üretim için model `StructuredAnswer(answer, claims)` döndürebilir. Her
+`StructuredClaim`, benzersiz bir `claim_id`, atomik claim metni ve en az bir
+`EvidenceReference(document_id, version, content_hash)` taşır. Opt-in
+`ExactStructuredClaimSupportCritic`, görüntülenen cevabın yalnız claim'lerden oluştuğunu,
+referansların retrieved/authorized hit'lerde bulunduğunu ve her claim'in referans verdiği
+kaynakta exact extract olduğunu doğrular. Bu sözleşme citation varlığını kanıt saymaz;
+query relevance, negation ve paraphrase entailment hâlâ ayrı insan-kalibreli kapılardır.
+
 Resolver ve critic retrieval'dan ayrı frozen vakalarla ölçülür:
 
 ```powershell
@@ -113,6 +124,9 @@ python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 scope `
 python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 critic `
   --cases sample-corpus/critic-eval.json `
   --allowed-prefix "Grounded answer:"
+
+python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 structured-critic `
+  --cases sample-corpus/structured-critic-eval.json
 ```
 
 Her iki kapı da false allow/accept, false refusal/reject, constraint/support mismatch ve

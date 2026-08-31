@@ -17,7 +17,7 @@ sonucuna körü körüne güvenmeden tenant, ACL, abstention ve citation kuralla
 | `IdentityProvider` | açıkça etkinleştirilen local header adapter | Entra ID, Keycloak/Authentik |
 | `QueryPolicy` | opt-in `DenyPhraseQueryPolicy` | merkezi policy engine / sınıflandırıcı + insan kuyruğu |
 | `QueryScopeResolver` | opt-in `ConfiguredPhraseScopeResolver` | insan-kalibreli zaman/otorite sınıflandırıcısı |
-| `EvidenceSupportCritic` | opt-in `ExactEvidenceSupportCritic` | structured claim validator / entailment modeli |
+| `EvidenceSupportCritic` | opt-in exact answer + structured claim critic'leri | insan-kalibreli entailment modeli |
 | `TelemetryProvider` | `MemoryTelemetry` | OpenTelemetry, Azure Monitor/Application Insights |
 
 ## Güven sınırları
@@ -39,13 +39,16 @@ sonucuna körü körüne güvenmeden tenant, ACL, abstention ve citation kuralla
    critic'e güvenmez ve abstain eder.
 9. Citation yalnız critic'in desteklediği yetkili ve kapsam-içi hit'lerden türetilir;
    critic yoksa önceki davranışla tüm yetkili hit'leri taşır.
-10. Secret, `.env`, credential, session veya token dosyaları document ingestion kapsamına
+10. Structured answer'daki her atomik claim exact belge sürümü ve content hash'e bağlanır.
+    Exact structured critic, claim dışı cevap metnini ve retrieved/authorized kümede olmayan
+    evidence referansını reddeder; query relevance veya semantic entailment iddiası taşımaz.
+11. Secret, `.env`, credential, session veya token dosyaları document ingestion kapsamına
    alınmaz.
-11. Ingest yalnız harici manifest'te açıkça listelenen relative Markdown yollarını okur;
+12. Ingest yalnız harici manifest'te açıkça listelenen relative Markdown yollarını okur;
    root escape, symlink, binary içerik ve boyut sınırı ihlali fail-closed reddedilir.
-12. PostgreSQL tenant ve rol filtresini ranking'den önce uygular. Servis katmanı sonucu
+13. PostgreSQL tenant ve rol filtresini ranking'den önce uygular. Servis katmanı sonucu
    tekrar kontrol ederek defense-in-depth sağlar.
-13. Kaynak güncellemesi eski chunk'ları silip yeni sürümü aynı transaction'da yazar.
+14. Kaynak güncellemesi eski chunk'ları silip yeni sürümü aynı transaction'da yazar.
 
 ## Production'a geçmeden önce açık kapılar
 

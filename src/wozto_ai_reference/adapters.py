@@ -8,11 +8,13 @@ from unicodedata import combining, normalize
 from .domain import (
     Document,
     EvidenceSupportDecision,
+    ModelOutput,
     Principal,
     QueryConstraints,
     QueryPolicyDecision,
     QueryScopeDecision,
     RetrievalHit,
+    StructuredAnswer,
     TelemetryEvent,
     evidence_reference,
 )
@@ -182,10 +184,12 @@ class ExactEvidenceSupportCritic:
         *,
         principal: Principal,
         query: str,
-        answer: str,
+        answer: ModelOutput,
         hits: Sequence[RetrievalHit],
     ) -> EvidenceSupportDecision:
         del query
+        if isinstance(answer, StructuredAnswer):
+            return EvidenceSupportDecision(supported=False, reason="structured_critic_required")
         if not hits:
             return EvidenceSupportDecision(supported=False, reason="no_evidence")
         if any(not is_authorized(principal, hit.document) for hit in hits):
@@ -218,6 +222,48 @@ class ExactEvidenceSupportCritic:
                 supporting_evidence=frozenset(evidence_reference(hit.document) for hit in hits),
             )
         return EvidenceSupportDecision(supported=False, reason="unsupported_answer")
+
+
+class ExactStructuredClaimSupportCritic:
+    """Fail-closed structured extractive baseline; not semantic entailment."""
+
+    async def evaluate(
+        self,
+        *,
+        principal: Principal,
+        query: str,
+        answer: ModelOutput,
+        hits: Sequence[RetrievalHit],
+    ) -> EvidenceSupportDecision:
+        del query
+        if not isinstance(answer, StructuredAnswer):
+            return EvidenceSupportDecision(supported=False, reason="structured_answer_required")
+        if not hits:
+            return EvidenceSupportDecision(supported=False, reason="no_evidence")
+        if any(not is_authorized(principal, hit.document) for hit in hits):
+            return EvidenceSupportDecision(supported=False, reason="unsafe_evidence_scope")
+
+        expected_answer = _normalized_text(" ".join(claim.text for claim in answer.claims))
+        if _normalized_text(answer.answer) != expected_answer:
+            return EvidenceSupportDecision(supported=False, reason="unclaimed_answer_text")
+
+        evidence_by_reference = {evidence_reference(hit.document): hit.document for hit in hits}
+        supporting_evidence: set = set()
+        for claim in answer.claims:
+            claim_text = _normalized_text(claim.text)
+            for reference in claim.supporting_evidence:
+                document = evidence_by_reference.get(reference)
+                if document is None:
+                    return EvidenceSupportDecision(supported=False, reason="unknown_evidence_reference")
+                if claim_text not in _normalized_text(document.content):
+                    return EvidenceSupportDecision(supported=False, reason="unsupported_claim")
+                supporting_evidence.add(reference)
+
+        return EvidenceSupportDecision(
+            supported=True,
+            reason="exact_claim_extracts",
+            supporting_evidence=frozenset(supporting_evidence),
+        )
 
 
 class LocalHeaderIdentityProvider:

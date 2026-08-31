@@ -6,6 +6,7 @@ from typing import Literal, Protocol
 from .domain import (
     Document,
     EvidenceSupportDecision,
+    ModelOutput,
     Principal,
     QueryPolicyDecision,
     QueryScopeDecision,
@@ -31,7 +32,7 @@ class ModelProvider(Protocol):
         query: str,
         hits: Sequence[RetrievalHit],
         trace_id: str,
-    ) -> str: ...
+    ) -> ModelOutput: ...
 
 
 class EmbeddingProvider(Protocol):
@@ -77,7 +78,7 @@ class EvidenceSupportCritic(Protocol):
         *,
         principal: Principal,
         query: str,
-        answer: str,
+        answer: ModelOutput,
         hits: Sequence[RetrievalHit],
     ) -> EvidenceSupportDecision: ...
 

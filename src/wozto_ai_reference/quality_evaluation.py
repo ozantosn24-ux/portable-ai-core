@@ -13,13 +13,22 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .adapters import (
     ConfiguredPhraseScopeResolver,
     ExactEvidenceSupportCritic,
+    ExactStructuredClaimSupportCritic,
     PhraseScopeRule,
 )
-from .domain import EvidenceReference, NonEmptyText, Principal, QueryConstraints, RetrievalHit
+from .domain import (
+    EvidenceReference,
+    NonEmptyText,
+    Principal,
+    QueryConstraints,
+    RetrievalHit,
+    StructuredAnswer,
+)
 from .ports import EvidenceSupportCritic, QueryScopeResolver
 
 SCOPE_EVAL_SCHEMA = "wozto-scope-eval/v1"
 CRITIC_EVAL_SCHEMA = "wozto-evidence-critic-eval/v1"
+STRUCTURED_CRITIC_EVAL_SCHEMA = "wozto-structured-claim-critic-eval/v1"
 
 
 class ScopeEvalCase(BaseModel):
@@ -91,6 +100,28 @@ class CriticEvalCase(BaseModel):
             raise ValueError("a supported critic case must identify supporting evidence")
         if not self.expected_supported and self.expected_supporting_evidence:
             raise ValueError("an unsupported critic case must not identify supporting evidence")
+        return self
+
+
+class StructuredCriticEvalCase(BaseModel):
+    """Frozen evidence and structured candidate; the evaluator never retrieves."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True, extra="forbid")
+
+    case_id: NonEmptyText
+    principal: Principal
+    query: NonEmptyText
+    answer: StructuredAnswer
+    hits: tuple[RetrievalHit, ...]
+    expected_supported: bool
+    expected_supporting_evidence: frozenset[EvidenceReference] = Field(default_factory=frozenset)
+
+    @model_validator(mode="after")
+    def validate_expected_support(self) -> StructuredCriticEvalCase:
+        if self.expected_supported and not self.expected_supporting_evidence:
+            raise ValueError("a supported structured critic case must identify supporting evidence")
+        if not self.expected_supported and self.expected_supporting_evidence:
+            raise ValueError("an unsupported structured critic case must not identify supporting evidence")
         return self
 
 
@@ -217,6 +248,52 @@ async def evaluate_evidence_critic(
     return report, frozen_results
 
 
+async def evaluate_structured_claim_critic(
+    *,
+    critic: EvidenceSupportCritic,
+    cases: Sequence[StructuredCriticEvalCase],
+) -> tuple[CriticEvalReport, tuple[CriticEvalCaseResult, ...]]:
+    """Evaluate structured generation against frozen hits, independent of retrieval."""
+
+    if not cases:
+        raise ValueError("structured critic evaluation requires at least one case")
+    results: list[CriticEvalCaseResult] = []
+    for case in cases:
+        actual = await critic.evaluate(
+            principal=case.principal,
+            query=case.query,
+            answer=case.answer,
+            hits=case.hits,
+        )
+        support_mismatch = (
+            actual.supported
+            and case.expected_supported
+            and actual.supporting_evidence != case.expected_supporting_evidence
+        )
+        exact_match = actual.supported == case.expected_supported and not support_mismatch
+        results.append(
+            CriticEvalCaseResult(
+                case_id=case.case_id,
+                exact_match=exact_match,
+                false_accept=actual.supported and not case.expected_supported,
+                false_reject=not actual.supported and case.expected_supported,
+                support_mismatch=support_mismatch,
+            )
+        )
+    frozen_results = tuple(results)
+    exact_matches = sum(result.exact_match for result in frozen_results)
+    report = CriticEvalReport(
+        cases=len(frozen_results),
+        exact_matches=exact_matches,
+        accuracy=exact_matches / len(frozen_results),
+        false_accepts=sum(result.false_accept for result in frozen_results),
+        false_rejects=sum(result.false_reject for result in frozen_results),
+        support_mismatches=sum(result.support_mismatch for result in frozen_results),
+        duplicate_case_ids=_duplicate_count([result.case_id for result in frozen_results]),
+    )
+    return report, frozen_results
+
+
 def _load_root(path: Path, *, schema: str) -> dict[str, object]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict) or raw.get("schema_version") != schema:
@@ -259,6 +336,11 @@ def load_critic_cases(path: Path) -> tuple[CriticEvalCase, ...]:
     return tuple(CriticEvalCase.model_validate(case) for case in _records(raw, field_name="cases"))
 
 
+def load_structured_critic_cases(path: Path) -> tuple[StructuredCriticEvalCase, ...]:
+    raw = _load_root(path, schema=STRUCTURED_CRITIC_EVAL_SCHEMA)
+    return tuple(StructuredCriticEvalCase.model_validate(case) for case in _records(raw, field_name="cases"))
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--minimum-accuracy", type=float, default=1.0)
@@ -271,6 +353,9 @@ def _parser() -> argparse.ArgumentParser:
     critic = subparsers.add_parser("critic")
     critic.add_argument("--cases", required=True, type=Path)
     critic.add_argument("--allowed-prefix", action="append", default=[])
+
+    structured_critic = subparsers.add_parser("structured-critic")
+    structured_critic.add_argument("--cases", required=True, type=Path)
     return parser
 
 
@@ -280,10 +365,15 @@ async def _run(args: argparse.Namespace) -> int:
             resolver=ConfiguredPhraseScopeResolver(load_scope_rules(args.rules)),
             cases=load_scope_cases(args.cases),
         )
-    else:
+    elif args.kind == "critic":
         report, _ = await evaluate_evidence_critic(
             critic=ExactEvidenceSupportCritic(allowed_prefixes=args.allowed_prefix),
             cases=load_critic_cases(args.cases),
+        )
+    else:
+        report, _ = await evaluate_structured_claim_critic(
+            critic=ExactStructuredClaimSupportCritic(),
+            cases=load_structured_critic_cases(args.cases),
         )
     passed = report.passes(minimum_accuracy=args.minimum_accuracy)
     print(

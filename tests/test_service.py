@@ -9,6 +9,7 @@ from wozto_ai_reference.adapters import (
     DenyPhraseQueryPolicy,
     DeterministicGroundedModel,
     ExactEvidenceSupportCritic,
+    ExactStructuredClaimSupportCritic,
     InMemorySearchProvider,
     MemoryTelemetry,
     PhraseScopeRule,
@@ -22,6 +23,9 @@ from wozto_ai_reference.domain import (
     QueryPolicyDecision,
     QueryScopeDecision,
     RetrievalHit,
+    StructuredAnswer,
+    StructuredClaim,
+    evidence_reference,
 )
 from wozto_ai_reference.service import QueryService, merge_query_constraints
 
@@ -624,6 +628,136 @@ def test_service_rejects_critic_support_outside_authorized_hits() -> None:
 
     assert result.abstained is True
     assert telemetry.events[-1].attributes["critic_reason"] == "critic_invalid_support"
+
+
+def test_structured_claim_critic_limits_citations_to_claim_evidence() -> None:
+    refund = _document(
+        tenant_id="tenant-a",
+        document_id="refund-policy",
+        content="Refund requests require human review. Decisions are logged.",
+    )
+    audit = _document(
+        tenant_id="tenant-a",
+        document_id="audit-policy",
+        content="Audit records are retained for one year.",
+    )
+
+    class StructuredModel:
+        async def generate(self, *, query, hits, trace_id):
+            del query, trace_id
+            refund_hit = next(hit for hit in hits if hit.document.document_id == "refund-policy")
+            return StructuredAnswer(
+                answer="Refund requests require human review.",
+                claims=(
+                    StructuredClaim(
+                        claim_id="refund-review",
+                        text="Refund requests require human review.",
+                        supporting_evidence=frozenset({evidence_reference(refund_hit.document)}),
+                    ),
+                ),
+            )
+
+    service = QueryService(
+        search=InMemorySearchProvider([refund, audit]),
+        model=StructuredModel(),
+        telemetry=MemoryTelemetry(),
+        evidence_critic=ExactStructuredClaimSupportCritic(),
+    )
+
+    result = _run_query(
+        service,
+        principal=Principal(tenant_id="tenant-a", user_id="employee-1"),
+        query="refund audit records",
+    )
+
+    assert result.abstained is False
+    assert result.answer == "Refund requests require human review."
+    assert [citation.document_id for citation in result.citations] == ["refund-policy"]
+
+
+def test_structured_claim_critic_rejects_plain_output_and_unclaimed_text() -> None:
+    document = _document(
+        tenant_id="tenant-a",
+        document_id="refund-policy",
+        content="Refund requests require human review.",
+    )
+    principal = Principal(tenant_id="tenant-a", user_id="employee-1")
+    hit = RetrievalHit(document=document, score=1.0)
+    critic = ExactStructuredClaimSupportCritic()
+
+    plain = asyncio.run(
+        critic.evaluate(
+            principal=principal,
+            query="refund",
+            answer=document.content,
+            hits=(hit,),
+        )
+    )
+    unclaimed = asyncio.run(
+        critic.evaluate(
+            principal=principal,
+            query="refund",
+            answer=StructuredAnswer(
+                answer="Refund requests require human review. Refunds are automatic.",
+                claims=(
+                    StructuredClaim(
+                        claim_id="refund-review",
+                        text="Refund requests require human review.",
+                        supporting_evidence=frozenset({evidence_reference(document)}),
+                    ),
+                ),
+            ),
+            hits=(hit,),
+        )
+    )
+
+    assert plain.reason == "structured_answer_required"
+    assert unclaimed.reason == "unclaimed_answer_text"
+
+
+def test_plain_exact_critic_does_not_silently_ignore_structured_claims() -> None:
+    document = _document(
+        tenant_id="tenant-a",
+        document_id="refund-policy",
+        content="Refund requests require human review.",
+    )
+    answer = StructuredAnswer(
+        answer=document.content,
+        claims=(
+            StructuredClaim(
+                claim_id="refund-review",
+                text=document.content,
+                supporting_evidence=frozenset({evidence_reference(document)}),
+            ),
+        ),
+    )
+
+    decision = asyncio.run(
+        ExactEvidenceSupportCritic().evaluate(
+            principal=Principal(tenant_id="tenant-a", user_id="employee-1"),
+            query="refund",
+            answer=answer,
+            hits=(RetrievalHit(document=document, score=1.0),),
+        )
+    )
+
+    assert decision.reason == "structured_critic_required"
+
+
+def test_structured_claim_contract_rejects_duplicate_claim_ids() -> None:
+    document = _document(
+        tenant_id="tenant-a",
+        document_id="refund-policy",
+        content="Refund requests require human review.",
+    )
+    claim = StructuredClaim(
+        claim_id="refund-review",
+        text=document.content,
+        supporting_evidence=frozenset({evidence_reference(document)}),
+    )
+
+    with pytest.raises(ValueError, match="claim ids"):
+        StructuredAnswer(answer=f"{claim.text} {claim.text}", claims=(claim, claim))
 
 
 @pytest.mark.parametrize("minimum_score", [-0.1, float("nan"), float("inf")])
