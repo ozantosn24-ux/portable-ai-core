@@ -10,6 +10,8 @@ canlı bulut kaynağı, gerçek müşteri verisi veya ücretli model kullanmaz. 
 - Model, search, storage, identity ve telemetry için cloud-neutral portlar vardır.
 - Yerel deterministic adapter ile uçtan uca `/query` akışı çalışır.
 - Retrieval hem adapter içinde hem servis katmanında tenant ve ACL kontrolünden geçer.
+- Operatörce yapılandırılan hard query policy, reddedilen isteği retrieval ve modelden önce keser.
+- `as_of`, kaynak durumu ve kaynak otoritesi koşulları belge metadata'sıyla fail-closed eşleşir.
 - Yetkili kaynak bulunmazsa sistem cevap uydurmak yerine abstain eder.
 - Model yalnız yetki kontrolünden geçmiş context'i görür.
 - Güvensiz local header identity varsayılan olarak kapalıdır.
@@ -29,6 +31,7 @@ iddiası veya production embedding modeli değildir.
 FastAPI
   └─ QueryService
       ├─ IdentityProvider ─ local headers / Entra ID / Keycloak
+      ├─ QueryPolicy      ─ operator-configured hard deny / future policy engine
       ├─ SearchProvider   ─ in-memory / pgvector / Azure AI Search
       ├─ EmbeddingProvider─ deterministic hash / local model / cloud embedding
       ├─ ModelProvider    ─ deterministic / Foundry / OpenAI / local model
@@ -63,6 +66,24 @@ curl.exe -X POST http://127.0.0.1:8080/query `
 
 `WOZTO_REFERENCE_ALLOW_INSECURE_HEADERS=1` production authentication değildir.
 Bu bayrak kapalıyken `/query` fail-closed olarak `503` döner.
+
+İsteğe bağlı kapsam koşulları çağrı gövdesinde açıkça taşınabilir:
+
+```json
+{
+  "query": "25 Ağustos 2026 tarihinde hangi politika geçerliydi?",
+  "top_k": 5,
+  "as_of": "2026-08-25",
+  "source_status": "current",
+  "source_authority": "authoritative"
+}
+```
+
+Çekirdek doğal dildeki tarihi veya "güncel/onaylı" niyetini kendiliğinden doğru kabul
+etmez; bu alanlar güvenilir çağıran/policy katmanında çözülür. `as_of` verildiğinde hiç
+validity metadata'sı olmayan kaynak fail-closed elenir. `DenyPhraseQueryPolicy` ise
+credential/PII gibi operatörün belirlediği ifadeleri search ve model çağrısından önce
+reddeden opt-in bir hard-policy adapter'ıdır; varsayılan gizli kelime listesi yoktur.
 
 ## Güvenli ingest ve retrieval ölçümü
 
@@ -102,9 +123,18 @@ Gerçek Vault pilotunda ayrı bir kaynak klasörü ve repo dışında tutulan ma
 kullanılmalı; `.env`, credential/session depoları ve müşteri PII dosyaları manifest'e
 eklenmemelidir. İlk `--apply` öncesi dry-run çıktısındaki dosya/chunk/byte sayısı ve
 manifest kapsamı operatörce kontrol edilmelidir. `plan_hash`; tenant, ACL, chunk kimliği,
-sürüm, kaynak URI'si ve yazılacak bütün içerik alanlarının hash'inden deterministik
+`source_status`, `source_authority`, validity penceresi, sürüm, kaynak URI'si ve yazılacak
+bütün içerik alanlarının hash'inden deterministik
 üretilir. Hash verilmeden apply çalışmaz; kaynak veya yetki dry-run'dan sonra değişirse
 veritabanına bağlanmadan önce reddedilir.
+
+Manifest belge girdileri isteğe bağlı olarak şunları taşır:
+
+- `source_status`: `unspecified`, `current`, `historical` veya `reference`;
+- `source_authority`: `unspecified`, `advisory` veya `authoritative`;
+- `valid_from` / `valid_through`: ISO `YYYY-MM-DD` sınırları.
+
+Metadata değişikliği de plan hash'ini değiştirir ve yeniden operatör incelemesi ister.
 
 ## İsteğe bağlı PostgreSQL + pgvector
 

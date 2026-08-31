@@ -3,7 +3,7 @@
 import re
 from collections.abc import Iterable, Sequence
 
-from .domain import Document, Principal, RetrievalHit, TelemetryEvent
+from .domain import Document, Principal, QueryPolicyDecision, RetrievalHit, TelemetryEvent
 from .ports import IdentityUnavailable
 
 _TERM_PATTERN = re.compile(r"[\wçğıöşü]+", re.IGNORECASE)
@@ -66,6 +66,29 @@ class DeterministicGroundedModel:
         del query, trace_id
         snippets = " ".join(hit.document.content for hit in hits)
         return f"Yetkili kaynaklara göre: {snippets}"
+
+
+class DenyPhraseQueryPolicy:
+    """Explicit opt-in hard deny list; no query text is emitted to telemetry."""
+
+    def __init__(self, phrases: Iterable[str], *, reason: str = "configured_hard_deny") -> None:
+        normalized = frozenset(" ".join(phrase.casefold().split()) for phrase in phrases)
+        if not normalized or any(not phrase for phrase in normalized):
+            raise ValueError("deny phrases must contain at least one non-empty phrase")
+        clean_reason = reason.strip()
+        if not clean_reason:
+            raise ValueError("policy reason must not be empty")
+        self._phrases = normalized
+        self._reason = QueryPolicyDecision(allowed=False, reason=clean_reason).reason
+
+    def evaluate(self, *, principal: Principal, query: str) -> QueryPolicyDecision:
+        del principal
+        normalized_query = " ".join(query.casefold().split())
+        denied = any(phrase in normalized_query for phrase in self._phrases)
+        return QueryPolicyDecision(
+            allowed=not denied,
+            reason=self._reason if denied else "allowed",
+        )
 
 
 class LocalHeaderIdentityProvider:

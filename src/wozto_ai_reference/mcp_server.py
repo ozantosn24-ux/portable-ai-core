@@ -57,11 +57,20 @@ ROLES_ENV = "WOZTO_MCP_ROLES"
 #: missing one is a tenant boundary crossed by a JSON key.
 IDENTITY_ARGUMENT_NAMES = frozenset(
     {
-        "tenant", "tenant_id", "tenantid",
-        "user", "user_id", "userid",
-        "role", "roles",
-        "acl", "acl_roles",
-        "principal", "identity", "auth", "authorization",
+        "tenant",
+        "tenant_id",
+        "tenantid",
+        "user",
+        "user_id",
+        "userid",
+        "role",
+        "roles",
+        "acl",
+        "acl_roles",
+        "principal",
+        "identity",
+        "auth",
+        "authorization",
     }
 )
 
@@ -240,7 +249,10 @@ async def dispatch(
         "ok": True,
         "abstained": result.abstained,
         "answer": result.answer,
-        "citations": [c.model_dump() for c in result.citations],
+        # JSON mode converts domain dates to ISO-8601 strings before the stdio
+        # renderer sees them.  Plain model_dump() would leave date objects in
+        # the mapping and make otherwise valid citations fail serialization.
+        "citations": [c.model_dump(mode="json") for c in result.citations],
         "trace_id": result.trace_id,
     }
 

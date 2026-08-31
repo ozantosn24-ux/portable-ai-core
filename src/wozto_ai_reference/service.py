@@ -2,11 +2,21 @@
 
 import math
 from collections.abc import Sequence
+from datetime import date
 from uuid import uuid4
 
 from .adapters import is_authorized
-from .domain import Citation, Principal, QueryResult, RetrievalHit, TelemetryEvent
-from .ports import ModelProvider, SearchProvider, TelemetryProvider
+from .domain import (
+    Citation,
+    Document,
+    Principal,
+    QueryResult,
+    RetrievalHit,
+    SourceAuthority,
+    SourceStatus,
+    TelemetryEvent,
+)
+from .ports import ModelProvider, QueryPolicy, SearchProvider, TelemetryProvider
 
 _ABSTAIN_MESSAGE = "Yeterli ve yetkili kaynak bulunamadı."
 
@@ -17,6 +27,9 @@ def eligible_hits(
     hits: Sequence[RetrievalHit],
     minimum_score: float,
     limit: int,
+    as_of: date | None = None,
+    source_status: SourceStatus | None = None,
+    source_authority: SourceAuthority | None = None,
 ) -> list[RetrievalHit]:
     """Apply the same score and authorization gate in serving and evaluation.
 
@@ -32,8 +45,37 @@ def eligible_hits(
     return [
         hit
         for hit in hits
-        if hit.score >= minimum_score and is_authorized(principal, hit.document)
+        if hit.score >= minimum_score
+        and is_authorized(principal, hit.document)
+        and source_is_eligible(
+            hit.document,
+            as_of=as_of,
+            source_status=source_status,
+            source_authority=source_authority,
+        )
     ][:limit]
+
+
+def source_is_eligible(
+    document: Document,
+    *,
+    as_of: date | None = None,
+    source_status: SourceStatus | None = None,
+    source_authority: SourceAuthority | None = None,
+) -> bool:
+    """Apply explicit caller-resolved source constraints; do not parse natural language."""
+
+    if source_status is not None and document.source_status != source_status:
+        return False
+    if source_authority is not None and document.source_authority != source_authority:
+        return False
+    if as_of is None:
+        return True
+    if document.valid_from is None and document.valid_through is None:
+        return False
+    if document.valid_from is not None and as_of < document.valid_from:
+        return False
+    return document.valid_through is None or as_of <= document.valid_through
 
 
 class QueryService:
@@ -44,6 +86,7 @@ class QueryService:
         model: ModelProvider,
         telemetry: TelemetryProvider,
         minimum_score: float = 0.01,
+        query_policy: QueryPolicy | None = None,
     ) -> None:
         if not math.isfinite(minimum_score) or minimum_score < 0.0:
             raise ValueError("minimum_score must be a finite non-negative number")
@@ -51,8 +94,18 @@ class QueryService:
         self._model = model
         self._telemetry = telemetry
         self._minimum_score = minimum_score
+        self._query_policy = query_policy
 
-    async def query(self, *, principal: Principal, query: str, limit: int = 5) -> QueryResult:
+    async def query(
+        self,
+        *,
+        principal: Principal,
+        query: str,
+        limit: int = 5,
+        as_of: date | None = None,
+        source_status: SourceStatus | None = None,
+        source_authority: SourceAuthority | None = None,
+    ) -> QueryResult:
         clean_query = query.strip()
         if not clean_query:
             raise ValueError("query must not be empty")
@@ -61,6 +114,22 @@ class QueryService:
 
         trace_id = uuid4().hex
         self._record("query.started", trace_id, principal, {"limit": limit})
+
+        if self._query_policy is not None:
+            policy = self._query_policy.evaluate(principal=principal, query=clean_query)
+            if not policy.allowed:
+                self._record(
+                    "query.abstained",
+                    trace_id,
+                    principal,
+                    {"reason": "request_policy", "policy_reason": policy.reason},
+                )
+                return QueryResult(
+                    answer=_ABSTAIN_MESSAGE,
+                    citations=[],
+                    abstained=True,
+                    trace_id=trace_id,
+                )
 
         provider_hits = await self._search.search(
             principal=principal,
@@ -72,6 +141,9 @@ class QueryService:
             hits=provider_hits,
             minimum_score=self._minimum_score,
             limit=limit,
+            as_of=as_of,
+            source_status=source_status,
+            source_authority=source_authority,
         )
 
         if not authorized_hits:
@@ -120,4 +192,8 @@ class QueryService:
             source_uri=document.source_uri,
             content_hash=document.content_hash,
             score=hit.score,
+            source_status=document.source_status,
+            source_authority=document.source_authority,
+            valid_from=document.valid_from,
+            valid_through=document.valid_through,
         )

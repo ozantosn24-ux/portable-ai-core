@@ -37,7 +37,17 @@ def test_build_plan_reads_only_allowlisted_markdown(tmp_path: Path) -> None:
     manifest = tmp_path / "manifest.json"
     _write_manifest(
         manifest,
-        documents=[{"path": "allowed.md", "document_id": "allowed-policy", "acl_roles": ["ops"]}],
+        documents=[
+            {
+                "path": "allowed.md",
+                "document_id": "allowed-policy",
+                "acl_roles": ["ops"],
+                "source_status": "historical",
+                "source_authority": "authoritative",
+                "valid_from": "2026-01-01",
+                "valid_through": "2026-08-24",
+            }
+        ],
     )
 
     plan = build_plan(source_root=source, manifest_path=manifest)
@@ -46,6 +56,10 @@ def test_build_plan_reads_only_allowlisted_markdown(tmp_path: Path) -> None:
     assert len(plan.documents) == 1
     assert plan.documents[0].document_id == "allowed-policy::0001"
     assert plan.documents[0].acl_roles == frozenset({"ops"})
+    assert plan.documents[0].source_status == "historical"
+    assert plan.documents[0].source_authority == "authoritative"
+    assert plan.documents[0].valid_from.isoformat() == "2026-01-01"
+    assert plan.documents[0].valid_through.isoformat() == "2026-08-24"
     assert "Secret" not in plan.documents[0].content
 
 
@@ -130,6 +144,54 @@ def test_plan_hash_changes_when_authorization_changes(tmp_path: Path) -> None:
     finance_plan = build_plan(source_root=source, manifest_path=manifest)
 
     assert finance_plan.plan_hash != ops_plan.plan_hash
+
+
+def test_plan_hash_changes_when_source_coverage_metadata_changes(tmp_path: Path) -> None:
+    source = tmp_path / "documents"
+    source.mkdir()
+    (source / "policy.md").write_text("# Policy\n\nStable content.", encoding="utf-8")
+    manifest = tmp_path / "manifest.json"
+    base = {
+        "path": "policy.md",
+        "document_id": "policy",
+        "source_status": "historical",
+        "source_authority": "authoritative",
+        "valid_through": "2026-08-24",
+    }
+    _write_manifest(manifest, documents=[base])
+    historical_plan = build_plan(source_root=source, manifest_path=manifest)
+
+    _write_manifest(manifest, documents=[{**base, "valid_through": "2026-08-25"}])
+    changed_plan = build_plan(source_root=source, manifest_path=manifest)
+
+    assert changed_plan.plan_hash != historical_plan.plan_hash
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("source_status", "live-ish", "source_status"),
+        ("source_authority", "trusted-ish", "source_authority"),
+        ("valid_from", "24-08-2026", "YYYY-MM-DD"),
+    ],
+)
+def test_manifest_rejects_invalid_source_coverage_metadata(
+    tmp_path: Path,
+    field: str,
+    value: str,
+    message: str,
+) -> None:
+    source = tmp_path / "documents"
+    source.mkdir()
+    (source / "policy.md").write_text("# Policy\n\nStable content.", encoding="utf-8")
+    manifest = tmp_path / "manifest.json"
+    _write_manifest(
+        manifest,
+        documents=[{"path": "policy.md", "document_id": "policy", field: value}],
+    )
+
+    with pytest.raises(ValueError, match=message):
+        build_plan(source_root=source, manifest_path=manifest)
 
 
 def test_markdown_chunk_limits_are_validated() -> None:

@@ -4,23 +4,31 @@
     {
       "path": "refund-policy.md",
       "document_id": "refund-policy",
-      "acl_roles": []
+      "acl_roles": [],
+      "source_status": "reference",
+      "source_authority": "authoritative"
     },
     {
       "path": "data-retention.md",
       "document_id": "data-retention",
-      "acl_roles": []
+      "acl_roles": [],
+      "source_status": "reference",
+      "source_authority": "authoritative"
     },
     {
       "path": "finance-approval.md",
       "document_id": "finance-approval",
-      "acl_roles": ["finance"]
+      "acl_roles": ["finance"],
+      "source_status": "reference",
+      "source_authority": "authoritative"
     },
     {
       "path": "other-tenant-shipping.md",
       "document_id": "shipping-policy",
       "tenant_id": "tenant-other",
-      "acl_roles": []
+      "acl_roles": [],
+      "source_status": "reference",
+      "source_authority": "authoritative"
     }
   ]
 }

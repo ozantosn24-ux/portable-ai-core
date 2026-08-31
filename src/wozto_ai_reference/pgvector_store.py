@@ -76,7 +76,6 @@ class EmbeddingSpaceMismatch(RuntimeError):
 class PgVectorStore:
     """pgvector destekli, tenant ve ACL farkindalikli hibrit depo."""
 
-
     """Implements both DocumentStore and SearchProvider against one local database."""
 
     def __init__(
@@ -95,17 +94,13 @@ class PgVectorStore:
         except psycopg.Error:
             raise ValueError("database_url must be valid libpq connection information") from None
         if connection_parameters.get("password"):
-            raise ValueError(
-                "database_url must not embed a password; use a libpq passfile outside the repo"
-            )
+            raise ValueError("database_url must not embed a password; use a libpq passfile outside the repo")
         if not 0.0 <= vector_weight <= 1.0:
             raise ValueError("vector_weight must be between 0 and 1")
         if text_search_config not in ALLOWED_TEXT_SEARCH_CONFIGS:
             # ⚠️ BEYAZ LISTE SART: bu deger DDL'e (generated column) LITERAL olarak
             # giriyor, yer tutucuyla gecemez ⇒ dogrulanmazsa enjeksiyon yuzeyi olur.
-            raise ValueError(
-                f"text_search_config must be one of {sorted(ALLOWED_TEXT_SEARCH_CONFIGS)}"
-            )
+            raise ValueError(f"text_search_config must be one of {sorted(ALLOWED_TEXT_SEARCH_CONFIGS)}")
         self._database_url = database_url
         self._embeddings = embeddings
         self._connection_factory = connection_factory or self._connect
@@ -151,6 +146,10 @@ class PgVectorStore:
                 source_uri text NOT NULL,
                 content text NOT NULL,
                 content_hash text NOT NULL,
+                source_status text NOT NULL DEFAULT 'unspecified',
+                source_authority text NOT NULL DEFAULT 'unspecified',
+                valid_from date,
+                valid_through date,
                 -- '{{}}' = PostgreSQL BOŞ DİZİ literali. Süslü parantezler ÇİFTLENMEK
                 -- ZORUNDA: bu dize `psycopg.sql.SQL(...).format(...)` içinden geçiyor ve
                 -- orada tek süslü parantez çifti KONUMSAL YER TUTUCUDUR (str.format
@@ -185,12 +184,21 @@ class PgVectorStore:
                 await connection.execute("CREATE EXTENSION IF NOT EXISTS vector")
                 await connection.execute(create_table)
                 await connection.execute(
+                    "ALTER TABLE rag_documents ADD COLUMN IF NOT EXISTS "
+                    "source_status text NOT NULL DEFAULT 'unspecified'"
+                )
+                await connection.execute(
+                    "ALTER TABLE rag_documents ADD COLUMN IF NOT EXISTS "
+                    "source_authority text NOT NULL DEFAULT 'unspecified'"
+                )
+                await connection.execute("ALTER TABLE rag_documents ADD COLUMN IF NOT EXISTS valid_from date")
+                await connection.execute("ALTER TABLE rag_documents ADD COLUMN IF NOT EXISTS valid_through date")
+                await connection.execute(
                     "CREATE INDEX IF NOT EXISTS rag_documents_tenant_source_idx "
                     "ON rag_documents (tenant_id, source_document_id)"
                 )
                 await connection.execute(
-                    "CREATE INDEX IF NOT EXISTS rag_documents_search_idx "
-                    "ON rag_documents USING gin (search_tsv)"
+                    "CREATE INDEX IF NOT EXISTS rag_documents_search_idx ON rag_documents USING gin (search_tsv)"
                 )
 
     async def upsert(self, document: Document) -> None:
@@ -229,9 +237,7 @@ class PgVectorStore:
             raise ValueError("all chunks must match the tenant and source document")
         if len({document.document_id for document in documents}) != len(documents):
             raise ValueError("chunk document_ids must be unique")
-        vectors = await self._embeddings.embed(
-            [indexed_text(document) for document in documents]
-        )
+        vectors = await self._embeddings.embed([indexed_text(document) for document in documents])
         if len(vectors) != len(documents):
             raise ValueError("embedding provider returned an unexpected vector count")
 
@@ -261,8 +267,12 @@ class PgVectorStore:
             """
             INSERT INTO rag_documents (
                 tenant_id, source_document_id, document_id, version, title, section,
-                source_uri, content, content_hash, acl_roles, embedding, embedding_model
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector, %s)
+                source_uri, content, content_hash, acl_roles, source_status,
+                source_authority, valid_from, valid_through, embedding, embedding_model
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s::vector, %s
+            )
             """,
             (
                 document.tenant_id,
@@ -275,6 +285,10 @@ class PgVectorStore:
                 document.content,
                 document.content_hash,
                 sorted(document.acl_roles),
+                document.source_status,
+                document.source_authority,
+                document.valid_from,
+                document.valid_through,
                 vector_literal(vector, dimensions=self._embeddings.dimensions),
                 self._space_id,
             ),
@@ -368,7 +382,8 @@ class PgVectorStore:
                 WHERE vector_score > 0 OR lexical_score > 0
             )
             SELECT tenant_id, document_id, version, title, section, source_uri,
-                   content, content_hash, acl_roles,
+                   content, content_hash, acl_roles, source_status, source_authority,
+                   valid_from, valid_through,
                    (%s * vector_norm + %s * lexical_norm) AS score
             FROM scaled
             ORDER BY score DESC, document_id, version
@@ -419,6 +434,10 @@ class PgVectorStore:
                     content=row["content"],
                     content_hash=row["content_hash"],
                     acl_roles=frozenset(row["acl_roles"]),
+                    source_status=row["source_status"],
+                    source_authority=row["source_authority"],
+                    valid_from=row["valid_from"],
+                    valid_through=row["valid_through"],
                 ),
                 score=max(0.0, float(row["score"])),
             )

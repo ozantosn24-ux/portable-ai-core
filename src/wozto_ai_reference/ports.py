@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Literal, Protocol
 
-from .domain import Document, Principal, RetrievalHit, TelemetryEvent
+from .domain import Document, Principal, QueryPolicyDecision, RetrievalHit, TelemetryEvent
 
 # Sorgu ve belge AYNI MODELE farkli girdi olarak verilir. Simetrik saglayicilar
 # (ornegin token-hash) bu ayrimi yok sayar; asimetrik modeller (e5, BGE, GTE...)
@@ -53,6 +53,10 @@ class SearchProvider(Protocol):
         query: str,
         limit: int,
     ) -> Sequence[RetrievalHit]: ...
+
+
+class QueryPolicy(Protocol):
+    def evaluate(self, *, principal: Principal, query: str) -> QueryPolicyDecision: ...
 
 
 class DocumentStore(Protocol):

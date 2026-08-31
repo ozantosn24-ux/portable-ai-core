@@ -10,10 +10,11 @@ Async style follows `test_service.py`: plain `asyncio.run`, no async plugin.
 from __future__ import annotations
 
 import asyncio
+from datetime import date
 
 import pytest
 
-from wozto_ai_reference.domain import Principal
+from wozto_ai_reference.domain import Document, Principal
 from wozto_ai_reference.mcp_server import (
     IDENTITY_ARGUMENT_NAMES,
     ROLES_ENV,
@@ -25,6 +26,7 @@ from wozto_ai_reference.mcp_server import (
     build_service,
     dispatch,
     reject_identity_arguments,
+    render,
     resolve_principal,
     tool_definitions,
 )
@@ -35,12 +37,11 @@ def demo_principal(roles: frozenset[str] = frozenset()) -> Principal:
 
 
 def call(name: str, arguments: dict | None, *, roles: frozenset[str] = frozenset()) -> dict:
-    return asyncio.run(
-        dispatch(name, arguments, service=build_service(), principal=demo_principal(roles))
-    )
+    return asyncio.run(dispatch(name, arguments, service=build_service(), principal=demo_principal(roles)))
 
 
 # --- startup identity ------------------------------------------------------
+
 
 def test_principal_comes_from_environment():
     p = resolve_principal({TENANT_ENV: "tenant-demo", USER_ENV: "u1", ROLES_ENV: "finance, ops"})
@@ -65,6 +66,7 @@ def test_missing_identity_FAILS_CLOSED(env):
 
 # --- the boundary ----------------------------------------------------------
 
+
 def test_tool_schema_EXPOSES_NO_identity_parameter():
     """The schema is part of the security argument: a reviewer can read the boundary."""
     for spec in tool_definitions():
@@ -76,8 +78,7 @@ def test_tool_schema_EXPOSES_NO_identity_parameter():
 
 @pytest.mark.parametrize(
     "smuggled",
-    ["tenant_id", "tenant", "user_id", "roles", "acl_roles", "principal", "identity",
-     "TENANT_ID", "tenant-id"],
+    ["tenant_id", "tenant", "user_id", "roles", "acl_roles", "principal", "identity", "TENANT_ID", "tenant-id"],
 )
 def test_identity_argument_is_REFUSED_not_ignored(smuggled):
     """Silently dropping it would make an injection attempt look like normal traffic."""
@@ -100,8 +101,7 @@ def test_other_tenant_document_NEVER_returned():
 def test_acl_role_gates_restricted_document():
     """Same query, two principals: the role is the only thing that changes."""
     without = call(TOOL_ANSWER, {"query": "finance approval limits"})
-    with_role = call(TOOL_ANSWER, {"query": "finance approval limits"},
-                     roles=frozenset({"finance"}))
+    with_role = call(TOOL_ANSWER, {"query": "finance approval limits"}, roles=frozenset({"finance"}))
     ids_without = {c["document_id"] for c in without["citations"]}
     ids_with = {c["document_id"] for c in with_role["citations"]}
     assert "finance-policy" not in ids_without
@@ -109,6 +109,7 @@ def test_acl_role_gates_restricted_document():
 
 
 # --- abstention ------------------------------------------------------------
+
 
 def test_abstention_is_a_SUCCESSFUL_result():
     """'No authorized source' is the authorization path working, not a fault.
@@ -129,7 +130,38 @@ def test_answer_carries_verifiable_provenance():
         assert c[field], f"citation missing {field}"
 
 
+def test_citation_validity_dates_are_json_serializable():
+    document = Document(
+        tenant_id="tenant-demo",
+        document_id="dated-policy",
+        version="v1",
+        title="Dated Policy",
+        section="Validity",
+        source_uri="memory://tenant-demo/dated-policy#validity",
+        content="This dated policy covers refund requests.",
+        content_hash="sha256:demo-dated-policy-v1",
+        source_status="historical",
+        source_authority="authoritative",
+        valid_from=date(2026, 1, 1),
+        valid_through=date(2026, 8, 24),
+    )
+
+    out = asyncio.run(
+        dispatch(
+            TOOL_ANSWER,
+            {"query": "refund requests"},
+            service=build_service([document]),
+            principal=demo_principal(),
+        )
+    )
+
+    assert out["citations"][0]["valid_from"] == "2026-01-01"
+    assert out["citations"][0]["valid_through"] == "2026-08-24"
+    assert '"valid_through": "2026-08-24"' in render(out)
+
+
 # --- argument validation ---------------------------------------------------
+
 
 @pytest.mark.parametrize("bad", [{}, {"query": ""}, {"query": "   "}, {"query": 5}])
 def test_bad_query_is_rejected_with_a_reason(bad):

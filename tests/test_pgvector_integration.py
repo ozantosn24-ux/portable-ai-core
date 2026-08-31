@@ -1,6 +1,7 @@
 """Opt-in local database test; skipped unless the operator provides a test URL."""
 
 import os
+from datetime import date
 from uuid import uuid4
 
 import pytest
@@ -33,6 +34,10 @@ def test_pgvector_round_trip_enforces_tenant_and_acl() -> None:
                 content="A human operator approves every payment.",
                 content_hash="sha256:integration",
                 acl_roles=frozenset({"finance"}),
+                source_status="historical",
+                source_authority="authoritative",
+                valid_from=date(2026, 1, 1),
+                valid_through=date(2026, 8, 24),
             )
         ]
         await store.replace_source(
@@ -52,6 +57,10 @@ def test_pgvector_round_trip_enforces_tenant_and_acl() -> None:
         )
         assert unauthorized == []
         assert [hit.document.document_id for hit in authorized] == ["policy::0001"]
+        assert authorized[0].document.source_status == "historical"
+        assert authorized[0].document.source_authority == "authoritative"
+        assert authorized[0].document.valid_from == date(2026, 1, 1)
+        assert authorized[0].document.valid_through == date(2026, 8, 24)
         await store.delete(tenant_id=tenant, document_id="policy::0001", version="v1")
 
     run_async(scenario())
@@ -128,24 +137,18 @@ def test_hybrid_legs_and_weights_reach_postgres() -> None:
                 # `WHERE vector>0 OR lexical>0` ikisini de eledi ve aramadan TEK belge
                 # dondu; tek satirda min=max oldugu icin normalizasyon her agirlikta 1.0
                 # verdi. (Olculdu: run 32036624961.)
-                doc("hybrid::both", "Refund window",
-                    "The refund window closes after fourteen days."),
-                doc("hybrid::refund-only", "Refund policy",
-                    "A refund is issued to the original payment method."),
-                doc("hybrid::receipt", "Refund receipts",
-                    "Every refund requires the original paper receipt."),
+                doc("hybrid::both", "Refund window", "The refund window closes after fourteen days."),
+                doc("hybrid::refund-only", "Refund policy", "A refund is issued to the original payment method."),
+                doc("hybrid::receipt", "Refund receipts", "Every refund requires the original paper receipt."),
             ],
         )
 
         # (a) LEKSIK BACAK CANLI: saf leksik (vector_weight=0) sorguda, terimleri
         #     taşıyan belge gelmeli; hiç ortak terimi olmayan belge ÜSTTE olmamalı.
-        lexical_only = await store(0.0).search(
-            principal=principal, query="refund window", limit=5
-        )
+        lexical_only = await store(0.0).search(principal=principal, query="refund window", limit=5)
         assert lexical_only, "saf leksik arama HİÇBİR ŞEY döndürmedi - ts_rank_cd yolu ölü"
         assert lexical_only[0].document.document_id == "hybrid::both", (
-            f"leksik bacak yanlış belgeyi üste koydu: "
-            f"{[h.document.document_id for h in lexical_only]}"
+            f"leksik bacak yanlış belgeyi üste koydu: {[h.document.document_id for h in lexical_only]}"
         )
 
         # (b) AĞIRLIK SQL'E ULAŞIYOR.

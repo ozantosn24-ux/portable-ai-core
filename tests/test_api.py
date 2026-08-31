@@ -49,6 +49,42 @@ def test_local_query_rejects_missing_identity_headers() -> None:
     assert response.json()["detail"] == "X-Tenant-ID and X-User-ID are required"
 
 
+def test_query_forwards_explicit_source_constraints_fail_closed() -> None:
+    client = TestClient(create_app(allow_insecure_identity=True))
+    headers = {
+        "X-Tenant-ID": "tenant-demo",
+        "X-User-ID": "local-operator",
+        "X-Roles": "employee",
+    }
+
+    response = client.post(
+        "/query",
+        headers=headers,
+        json={
+            "query": "refund policy",
+            "as_of": "2026-08-25",
+            "source_status": "current",
+            "source_authority": "authoritative",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["abstained"] is True
+    assert response.json()["citations"] == []
+
+
+def test_query_rejects_unknown_source_constraint_values() -> None:
+    client = TestClient(create_app(allow_insecure_identity=True))
+
+    response = client.post(
+        "/query",
+        headers={"X-Tenant-ID": "tenant-demo", "X-User-ID": "local-operator"},
+        json={"query": "refund policy", "source_status": "probably-current"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_unknown_backend_fails_closed(monkeypatch) -> None:
     monkeypatch.setenv("WOZTO_REFERENCE_BACKEND", "unknown")
 

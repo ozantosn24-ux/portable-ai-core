@@ -10,10 +10,12 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
+from typing import cast
 
 from .asyncio_compat import run as run_async
-from .domain import Document
+from .domain import Document, SourceAuthority, SourceStatus
 from .embedding import HashEmbeddingProvider
 from .ports import DocumentStore
 
@@ -21,7 +23,9 @@ MAX_SOURCE_BYTES = 1_000_000
 _DOCUMENT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,119}$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 _PLAN_HASH = re.compile(r"^sha256:[0-9a-f]{64}$")
-PLAN_SCHEMA = "wozto-ingest-plan/v1"
+PLAN_SCHEMA = "wozto-ingest-plan/v2"
+_SOURCE_STATUSES = frozenset({"unspecified", "current", "historical", "reference"})
+_SOURCE_AUTHORITIES = frozenset({"unspecified", "advisory", "authoritative"})
 
 
 class PlanHashMismatch(ValueError):
@@ -34,6 +38,10 @@ class ManifestEntry:
     document_id: str
     tenant_id: str
     acl_roles: frozenset[str]
+    source_status: SourceStatus
+    source_authority: SourceAuthority
+    valid_from: date | None
+    valid_through: date | None
 
 
 @dataclass(frozen=True)
@@ -76,6 +84,10 @@ def compute_plan_hash(plan: IngestPlan) -> str:
                     "section": document.section,
                     "source_document_id": batch.source_document_id,
                     "source_uri": document.source_uri,
+                    "source_status": document.source_status,
+                    "source_authority": document.source_authority,
+                    "valid_from": (document.valid_from.isoformat() if document.valid_from else None),
+                    "valid_through": (document.valid_through.isoformat() if document.valid_through else None),
                     "tenant_id": batch.tenant_id,
                     "title": document.title,
                     "version": document.version,
@@ -130,6 +142,23 @@ def _safe_source(root: Path, relative: object) -> Path:
     return candidate
 
 
+def _optional_date(value: object, *, field: str) -> date | None:
+    if value is None:
+        return None
+    text = _nonempty(value, field=field)
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise ValueError(f"{field} must use YYYY-MM-DD") from None
+
+
+def _choice(value: object, *, field: str, allowed: frozenset[str]) -> str:
+    text = _nonempty(value, field=field).casefold()
+    if text not in allowed:
+        raise ValueError(f"{field} must be one of {sorted(allowed)}")
+    return text
+
+
 def load_manifest(*, source_root: Path, manifest_path: Path) -> tuple[ManifestEntry, ...]:
     root = source_root.resolve(strict=True)
     manifest = manifest_path.resolve(strict=True)
@@ -149,12 +178,36 @@ def load_manifest(*, source_root: Path, manifest_path: Path) -> tuple[ManifestEn
             raise ValueError(f"duplicate tenant/document_id: {tenant_id}/{document_id}")
         seen.add(key)
         roles = frozenset(_nonempty(role, field="acl_role") for role in raw.get("acl_roles", []))
+        source_status = cast(
+            SourceStatus,
+            _choice(
+                raw.get("source_status", "unspecified"),
+                field="source_status",
+                allowed=_SOURCE_STATUSES,
+            ),
+        )
+        source_authority = cast(
+            SourceAuthority,
+            _choice(
+                raw.get("source_authority", "unspecified"),
+                field="source_authority",
+                allowed=_SOURCE_AUTHORITIES,
+            ),
+        )
+        valid_from = _optional_date(raw.get("valid_from"), field="valid_from")
+        valid_through = _optional_date(raw.get("valid_through"), field="valid_through")
+        if valid_from and valid_through and valid_from > valid_through:
+            raise ValueError("valid_from must not be after valid_through")
         entries.append(
             ManifestEntry(
                 path=_safe_source(root, raw.get("path")),
                 document_id=document_id,
                 tenant_id=tenant_id,
                 acl_roles=roles,
+                source_status=source_status,
+                source_authority=source_authority,
+                valid_from=valid_from,
+                valid_through=valid_through,
             )
         )
     if not entries:
@@ -256,6 +309,10 @@ def build_plan(
                     content=content,
                     content_hash=f"sha256:{content_hash}",
                     acl_roles=entry.acl_roles,
+                    source_status=entry.source_status,
+                    source_authority=entry.source_authority,
+                    valid_from=entry.valid_from,
+                    valid_through=entry.valid_through,
                 )
             )
         if not source_documents:

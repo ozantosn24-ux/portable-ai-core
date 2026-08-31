@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import AbstractAsyncContextManager
+from datetime import date
 from typing import Any
 
 import pytest
@@ -60,6 +61,9 @@ def _document(document_id: str = "policy::0001") -> Document:
         content="Human approval policy.",
         content_hash="sha256:test",
         acl_roles=frozenset({"ops"}),
+        source_status="historical",
+        source_authority="authoritative",
+        valid_through=date(2026, 8, 24),
     )
 
 
@@ -118,6 +122,10 @@ def test_search_pushes_tenant_and_acl_filter_parameters_into_sql() -> None:
         "content": "Human approval policy.",
         "content_hash": "sha256:test",
         "acl_roles": ["ops"],
+        "source_status": "historical",
+        "source_authority": "authoritative",
+        "valid_from": None,
+        "valid_through": date(2026, 8, 24),
         "score": 0.9,
     }
     connection = FakeConnection(rows=[row])
@@ -139,3 +147,5 @@ def test_search_pushes_tenant_and_acl_filter_parameters_into_sql() -> None:
     assert params[3] == "tenant-a"
     assert params[4] == ["ops"]
     assert hits[0].document.tenant_id == "tenant-a"
+    assert hits[0].document.source_status == "historical"
+    assert hits[0].document.valid_through == date(2026, 8, 24)

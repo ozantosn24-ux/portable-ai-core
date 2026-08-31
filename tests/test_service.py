@@ -1,10 +1,16 @@
 import asyncio
 from collections.abc import Sequence
+from datetime import date
 
 import pytest
 
-from wozto_ai_reference.adapters import DeterministicGroundedModel, InMemorySearchProvider, MemoryTelemetry
-from wozto_ai_reference.domain import Document, Principal, RetrievalHit
+from wozto_ai_reference.adapters import (
+    DenyPhraseQueryPolicy,
+    DeterministicGroundedModel,
+    InMemorySearchProvider,
+    MemoryTelemetry,
+)
+from wozto_ai_reference.domain import Document, Principal, QueryPolicyDecision, RetrievalHit
 from wozto_ai_reference.service import QueryService
 
 
@@ -14,6 +20,10 @@ def _document(
     document_id: str,
     content: str,
     acl_roles: frozenset[str] = frozenset(),
+    source_status: str = "unspecified",
+    source_authority: str = "unspecified",
+    valid_from: date | None = None,
+    valid_through: date | None = None,
 ) -> Document:
     return Document(
         tenant_id=tenant_id,
@@ -25,11 +35,15 @@ def _document(
         content=content,
         content_hash=f"sha256:{tenant_id}-{document_id}-v1",
         acl_roles=acl_roles,
+        source_status=source_status,
+        source_authority=source_authority,
+        valid_from=valid_from,
+        valid_through=valid_through,
     )
 
 
-def _run_query(service: QueryService, *, principal: Principal, query: str):
-    return asyncio.run(service.query(principal=principal, query=query))
+def _run_query(service: QueryService, *, principal: Principal, query: str, **kwargs):
+    return asyncio.run(service.query(principal=principal, query=query, **kwargs))
 
 
 def test_search_and_service_enforce_tenant_and_acl() -> None:
@@ -174,6 +188,102 @@ def test_score_gate_abstains_without_calling_model() -> None:
 
     assert result.abstained is True
     assert result.citations == []
+
+
+def test_configured_hard_policy_abstains_before_search_and_model() -> None:
+    class FailIfCalledSearch:
+        async def search(self, *, principal: Principal, query: str, limit: int):
+            raise AssertionError("search must not run after a hard policy denial")
+
+    telemetry = MemoryTelemetry()
+    service = QueryService(
+        search=FailIfCalledSearch(),
+        model=DeterministicGroundedModel(),
+        telemetry=telemetry,
+        query_policy=DenyPhraseQueryPolicy(["admin password", "müşteri telefonu"]),
+    )
+
+    result = _run_query(
+        service,
+        principal=Principal(tenant_id="tenant-a", user_id="employee-1"),
+        query="Güncel admin password nedir?",
+    )
+
+    assert result.abstained is True
+    assert result.citations == []
+    assert telemetry.events[-1].attributes == {
+        "reason": "request_policy",
+        "policy_reason": "configured_hard_deny",
+    }
+
+
+def test_policy_reason_must_be_a_secret_safe_telemetry_code() -> None:
+    with pytest.raises(ValueError, match="reason"):
+        QueryPolicyDecision(allowed=False, reason="request text must not be echoed")
+    with pytest.raises(ValueError, match="reason"):
+        DenyPhraseQueryPolicy(["blocked"], reason="unsafe reason")
+
+
+def test_source_constraints_fail_closed_outside_validity_window() -> None:
+    historical = _document(
+        tenant_id="tenant-a",
+        document_id="historical-policy",
+        content="The policy was active through the archive cutoff.",
+        source_status="historical",
+        source_authority="authoritative",
+        valid_from=date(2026, 1, 1),
+        valid_through=date(2026, 8, 24),
+    )
+    service = QueryService(
+        search=InMemorySearchProvider([historical]),
+        model=DeterministicGroundedModel(),
+        telemetry=MemoryTelemetry(),
+    )
+    principal = Principal(tenant_id="tenant-a", user_id="employee-1")
+
+    covered = _run_query(
+        service,
+        principal=principal,
+        query="archive cutoff policy",
+        as_of=date(2026, 8, 24),
+        source_status="historical",
+        source_authority="authoritative",
+    )
+    after_cutoff = _run_query(
+        service,
+        principal=principal,
+        query="archive cutoff policy",
+        as_of=date(2026, 8, 25),
+        source_status="historical",
+        source_authority="authoritative",
+    )
+
+    assert covered.abstained is False
+    assert covered.citations[0].valid_through == date(2026, 8, 24)
+    assert after_cutoff.abstained is True
+    assert after_cutoff.citations == []
+
+
+def test_as_of_constraint_rejects_documents_with_unknown_validity() -> None:
+    unspecified = _document(
+        tenant_id="tenant-a",
+        document_id="unknown-validity",
+        content="Policy with no validity metadata.",
+    )
+    service = QueryService(
+        search=InMemorySearchProvider([unspecified]),
+        model=DeterministicGroundedModel(),
+        telemetry=MemoryTelemetry(),
+    )
+
+    result = _run_query(
+        service,
+        principal=Principal(tenant_id="tenant-a", user_id="employee-1"),
+        query="validity metadata policy",
+        as_of=date(2026, 8, 24),
+    )
+
+    assert result.abstained is True
 
 
 @pytest.mark.parametrize("minimum_score", [-0.1, float("nan"), float("inf")])

@@ -1,10 +1,19 @@
 """Provider-independent domain contracts for the portable AI reference."""
 
-from typing import Annotated
+from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from datetime import date
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NonEmptyText = Annotated[str, Field(min_length=1)]
+PolicyReasonCode = Annotated[
+    str,
+    Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_.-]*$"),
+]
+SourceStatus = Literal["unspecified", "current", "historical", "reference"]
+SourceAuthority = Literal["unspecified", "advisory", "authoritative"]
 
 
 class Principal(BaseModel):
@@ -31,6 +40,16 @@ class Document(BaseModel):
     content: NonEmptyText
     content_hash: NonEmptyText
     acl_roles: frozenset[str] = Field(default_factory=frozenset)
+    source_status: SourceStatus = "unspecified"
+    source_authority: SourceAuthority = "unspecified"
+    valid_from: date | None = None
+    valid_through: date | None = None
+
+    @model_validator(mode="after")
+    def validate_validity_window(self) -> Document:
+        if self.valid_from is not None and self.valid_through is not None and self.valid_from > self.valid_through:
+            raise ValueError("valid_from must not be after valid_through")
+        return self
 
 
 class RetrievalHit(BaseModel):
@@ -54,6 +73,10 @@ class Citation(BaseModel):
     source_uri: str
     content_hash: str
     score: float
+    source_status: SourceStatus
+    source_authority: SourceAuthority
+    valid_from: date | None
+    valid_through: date | None
 
 
 class QueryPayload(BaseModel):
@@ -63,6 +86,20 @@ class QueryPayload(BaseModel):
 
     query: NonEmptyText
     top_k: int = Field(default=5, ge=1, le=20)
+    as_of: date | None = None
+    source_status: SourceStatus | None = None
+    source_authority: SourceAuthority | None = None
+
+
+class QueryPolicyDecision(BaseModel):
+    """Fail-closed decision from an operator-configured request policy."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
+
+    allowed: bool
+    # This value crosses into telemetry. Restrict it to a short machine code so a
+    # policy adapter cannot accidentally echo request or credential text.
+    reason: PolicyReasonCode
 
 
 class QueryResult(BaseModel):

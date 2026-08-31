@@ -128,7 +128,14 @@ def create_app(
             raise HTTPException(status_code=503, detail="Trusted identity provider is unavailable") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return await resolved_service.query(principal=principal, query=payload.query, limit=payload.top_k)
+        return await resolved_service.query(
+            principal=principal,
+            query=payload.query,
+            limit=payload.top_k,
+            as_of=payload.as_of,
+            source_status=payload.source_status,
+            source_authority=payload.source_authority,
+        )
 
     return app
 
