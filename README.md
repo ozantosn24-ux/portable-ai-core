@@ -109,7 +109,7 @@ document id'lerinin citation'larını döndürür. Bu deterministik baseline par
 entailment değerlendirmez; production groundedness critic yerine geçmez.
 
 Yapılandırılmış üretim için model `StructuredAnswer(answer, claims)` döndürebilir. Her
-`StructuredClaim`, benzersiz bir `claim_id`, atomik claim metni ve en az bir
+`StructuredClaim`, benzersiz bir `claim_id`, atomik ve **self-contained** claim metni ile en az bir
 `EvidenceReference(document_id, version, content_hash)` taşır. Opt-in
 `ExactStructuredClaimSupportCritic`, görüntülenen cevabın yalnız claim'lerden oluştuğunu,
 referansların retrieved/authorized hit'lerde bulunduğunu ve her claim'in referans verdiği
@@ -118,7 +118,11 @@ query relevance, negation ve paraphrase entailment hâlâ ayrı insan-kalibreli 
 
 `SemanticStructuredClaimSupportCritic` bu iki kapıyı ayrı `TextPairScorer` portlarıyla
 uygular. Önce answer/claim bütünlüğü, tenant/ACL ve tam evidence referansı mekanik olarak
-doğrulanır; sonra her claim için query relevance ve her atıf için entailment aranır.
+doğrulanır; sonra her self-contained claim için doğrudan query relevance ve her atıf için
+entailment aranır. Claim, öznesini ve koşullarını soruya veya önceki cevap metnine gönderme
+yapmadan belirtmelidir; bu şart `StructuredClaim` JSON Schema açıklamasına da işlenmiştir.
+Relevance'ı cited chunk üzerinden geçirmek çok-konulu chunk'larda alakasız claim aklama riski
+taşıdığı için doğrudan claim kapısının yerine kullanılmaz.
 Bir claim birden fazla belgeye atıf yapıyorsa belgelerin **tümü** eşiği geçmelidir; böylece
 destekli bir kaynağın yanına ilgisiz citation ekleyerek destek aklama reddedilir. Eşiklerin
 varsayılanı yoktur. Model adı, revision, positive-label sözleşmesi ve eşikler frozen,

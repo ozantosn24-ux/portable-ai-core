@@ -30,6 +30,13 @@ class _Scorer:
         return self._scores
 
 
+def test_structured_claim_schema_exposes_self_contained_text_contract() -> None:
+    description = StructuredClaim.model_json_schema()["properties"]["text"]["description"]
+
+    assert "self-contained" in description
+    assert "without relying on the query" in description
+
+
 def _principal() -> Principal:
     return Principal(tenant_id="tenant-a", user_id="reviewer", roles=frozenset({"reader"}))
 

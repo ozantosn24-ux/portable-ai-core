@@ -74,12 +74,17 @@ class EvidenceReference(BaseModel):
 
 
 class StructuredClaim(BaseModel):
-    """Atomic model claim with version- and content-bound evidence references."""
+    """Atomic, self-contained claim with content-bound evidence references."""
 
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True, extra="forbid")
 
     claim_id: DecisionReasonCode
-    text: NonEmptyText
+    text: NonEmptyText = Field(
+        description=(
+            "Atomic and self-contained claim text that identifies its subject and "
+            "conditions without relying on the query or preceding answer text."
+        )
+    )
     supporting_evidence: frozenset[EvidenceReference] = Field(min_length=1)
 
 

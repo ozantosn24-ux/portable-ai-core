@@ -55,6 +55,8 @@ async def _safe_scores(
 class SemanticStructuredClaimSupportCritic:
     """Require query relevance and evidence entailment for every structured claim.
 
+    StructuredClaim.text follows the domain contract and must be self-contained;
+    relevance is deliberately scored against that claim instead of the cited chunk.
     Thresholds have no defaults: they must come from a frozen, human-reviewed
     calibration set for the exact scorer revisions and corpus. Every cited evidence
     pair is judged; a substring alone is not treated as semantic proof.
