@@ -365,3 +365,37 @@ def test_structured_claim_eval_loader_has_separate_versioned_schema(tmp_path: Pa
     cases = load_structured_critic_cases(path)
 
     assert cases[0].answer.claims[0].supporting_evidence == frozenset({reference})
+
+
+def test_semantic_critic_cli_requires_explicit_models_revisions_and_thresholds() -> None:
+    from wozto_ai_reference.quality_evaluation import _parser
+
+    parser = _parser()
+    args = parser.parse_args(
+        [
+            "semantic-structured-critic",
+            "--cases",
+            "cases.json",
+            "--relevance-model",
+            "example/relevance",
+            "--relevance-revision",
+            "rev-a",
+            "--entailment-model",
+            "example/nli",
+            "--entailment-revision",
+            "rev-b",
+            "--entailment-positive-label-index",
+            "0",
+            "--minimum-relevance",
+            "0.7",
+            "--minimum-entailment",
+            "0.8",
+        ]
+    )
+
+    assert args.kind == "semantic-structured-critic"
+    assert args.relevance_revision == "rev-a"
+    assert args.entailment_revision == "rev-b"
+    assert args.entailment_positive_label_index == 0
+    assert args.minimum_relevance == 0.7
+    assert args.minimum_entailment == 0.8

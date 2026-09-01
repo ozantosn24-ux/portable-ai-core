@@ -17,7 +17,8 @@ sonucuna körü körüne güvenmeden tenant, ACL, abstention ve citation kuralla
 | `IdentityProvider` | açıkça etkinleştirilen local header adapter | Entra ID, Keycloak/Authentik |
 | `QueryPolicy` | opt-in `DenyPhraseQueryPolicy` | merkezi policy engine / sınıflandırıcı + insan kuyruğu |
 | `QueryScopeResolver` | opt-in `ConfiguredPhraseScopeResolver` | insan-kalibreli zaman/otorite sınıflandırıcısı |
-| `EvidenceSupportCritic` | opt-in exact answer + structured claim critic'leri | insan-kalibreli entailment modeli |
+| `EvidenceSupportCritic` | opt-in exact + threshold semantic structured claim critic'leri | insan-kalibreli production judge |
+| `TextPairScorer` | opsiyonel pinned Transformers sequence classifier | yerel ONNX/OpenVINO, cloud classifier |
 | `TelemetryProvider` | `MemoryTelemetry` | OpenTelemetry, Azure Monitor/Application Insights |
 
 ## Güven sınırları
@@ -42,20 +43,25 @@ sonucuna körü körüne güvenmeden tenant, ACL, abstention ve citation kuralla
 10. Structured answer'daki her atomik claim exact belge sürümü ve content hash'e bağlanır.
     Exact structured critic, claim dışı cevap metnini ve retrieved/authorized kümede olmayan
     evidence referansını reddeder; query relevance veya semantic entailment iddiası taşımaz.
-11. Secret, `.env`, credential, session veya token dosyaları document ingestion kapsamına
-   alınmaz.
-12. Ingest yalnız harici manifest'te açıkça listelenen relative Markdown yollarını okur;
-   root escape, symlink, binary içerik ve boyut sınırı ihlali fail-closed reddedilir.
-13. PostgreSQL tenant ve rol filtresini ranking'den önce uygular. Servis katmanı sonucu
-   tekrar kontrol ederek defense-in-depth sağlar.
-14. Kaynak güncellemesi eski chunk'ları silip yeni sürümü aynı transaction'da yazar.
+11. Semantic structured critic aynı mekanik kapıları model çağrısından önce uygular. Ardından
+    her claim için query relevance ve her atıf için entailment eşiği ister. Scorer exception,
+    non-finite/out-of-range skor, eksik skor veya cited evidence'lardan herhangi birinin eşik
+    altı kalması fail-closed abstain olur. Eşik ve model revision için varsayılan yoktur.
+12. Secret, `.env`, credential, session veya token dosyaları document ingestion kapsamına
+    alınmaz.
+13. Ingest yalnız harici manifest'te açıkça listelenen relative Markdown yollarını okur;
+    root escape, symlink, binary içerik ve boyut sınırı ihlali fail-closed reddedilir.
+14. PostgreSQL tenant ve rol filtresini ranking'den önce uygular. Servis katmanı sonucu
+    tekrar kontrol ederek defense-in-depth sağlar.
+15. Kaynak güncellemesi eski chunk'ları silip yeni sürümü aynı transaction'da yazar.
 
 ## Production'a geçmeden önce açık kapılar
 
 - JWT doğrulayan identity adapter ve tenant'ın doğrulanmış claim'den türetilmesi,
 - parser sürümü/provenance ve silinen manifest kaynakları için reconciliation,
 - gerçek kullanıcı sorularından en az 30–50 vakalık lexical/vector/hybrid retrieval eval,
-- exact extractive baseline'ın ötesinde insan-kalibreli semantic groundedness critic,
+- semantic critic için insan-onaylı paraphrase/negation/query-relevance seti, pinned model
+  revision'ları ve false-accept=0 doğrulanmış eşikler,
 - doğal dilden zaman/otorite koşulu çıkaran bileşen için insan-etiketli calibration;
   bu bileşen hard policy'nin veya kaynak metadata doğrulamasının yerine geçmez,
 - prompt injection ve cross-tenant negatif testleri,

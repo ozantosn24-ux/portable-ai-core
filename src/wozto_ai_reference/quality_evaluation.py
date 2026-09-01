@@ -24,7 +24,9 @@ from .domain import (
     RetrievalHit,
     StructuredAnswer,
 )
+from .pairwise_scorer import TransformersTextPairScorer
 from .ports import EvidenceSupportCritic, QueryScopeResolver
+from .semantic_critic import SemanticStructuredClaimSupportCritic
 
 SCOPE_EVAL_SCHEMA = "wozto-scope-eval/v1"
 CRITIC_EVAL_SCHEMA = "wozto-evidence-critic-eval/v1"
@@ -356,6 +358,16 @@ def _parser() -> argparse.ArgumentParser:
 
     structured_critic = subparsers.add_parser("structured-critic")
     structured_critic.add_argument("--cases", required=True, type=Path)
+
+    semantic_critic = subparsers.add_parser("semantic-structured-critic")
+    semantic_critic.add_argument("--cases", required=True, type=Path)
+    semantic_critic.add_argument("--relevance-model", required=True)
+    semantic_critic.add_argument("--relevance-revision", required=True)
+    semantic_critic.add_argument("--entailment-model", required=True)
+    semantic_critic.add_argument("--entailment-revision", required=True)
+    semantic_critic.add_argument("--entailment-positive-label-index", required=True, type=int)
+    semantic_critic.add_argument("--minimum-relevance", required=True, type=float)
+    semantic_critic.add_argument("--minimum-entailment", required=True, type=float)
     return parser
 
 
@@ -370,9 +382,27 @@ async def _run(args: argparse.Namespace) -> int:
             critic=ExactEvidenceSupportCritic(allowed_prefixes=args.allowed_prefix),
             cases=load_critic_cases(args.cases),
         )
-    else:
+    elif args.kind == "structured-critic":
         report, _ = await evaluate_structured_claim_critic(
             critic=ExactStructuredClaimSupportCritic(),
+            cases=load_structured_critic_cases(args.cases),
+        )
+    else:
+        report, _ = await evaluate_structured_claim_critic(
+            critic=SemanticStructuredClaimSupportCritic(
+                relevance_scorer=TransformersTextPairScorer(
+                    model_name=args.relevance_model,
+                    revision=args.relevance_revision,
+                    positive_label_index=None,
+                ),
+                entailment_scorer=TransformersTextPairScorer(
+                    model_name=args.entailment_model,
+                    revision=args.entailment_revision,
+                    positive_label_index=args.entailment_positive_label_index,
+                ),
+                minimum_relevance=args.minimum_relevance,
+                minimum_entailment=args.minimum_entailment,
+            ),
             cases=load_structured_critic_cases(args.cases),
         )
     passed = report.passes(minimum_accuracy=args.minimum_accuracy)

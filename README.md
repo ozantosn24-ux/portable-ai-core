@@ -19,6 +19,9 @@ canlı bulut kaynağı, gerçek müşteri verisi veya ücretli model kullanmaz. 
 - `StructuredAnswer`, her atomik claim'i kaynak `document_id + version + content_hash`
   referanslarına bağlar. Opt-in `ExactStructuredClaimSupportCritic`, claim dışı cevap
   metnini, getirilmeyen referansı ve kaynakta birebir bulunmayan claim'i fail-closed reddeder.
+- Opt-in `SemanticStructuredClaimSupportCritic`, zorunlu ve açık relevance/entailment
+  eşikleriyle her claim'i hem sorguya hem referans verdiği tüm kanıtlara karşı ölçer;
+  scorer hatası, geçersiz skor veya eşik altı sonuç abstain olur.
 - Yetkili kaynak bulunmazsa sistem cevap uydurmak yerine abstain eder.
 - Model yalnız yetki kontrolünden geçmiş context'i görür.
 - Güvensiz local header identity varsayılan olarak kapalıdır.
@@ -113,6 +116,16 @@ referansların retrieved/authorized hit'lerde bulunduğunu ve her claim'in refer
 kaynakta exact extract olduğunu doğrular. Bu sözleşme citation varlığını kanıt saymaz;
 query relevance, negation ve paraphrase entailment hâlâ ayrı insan-kalibreli kapılardır.
 
+`SemanticStructuredClaimSupportCritic` bu iki kapıyı ayrı `TextPairScorer` portlarıyla
+uygular. Önce answer/claim bütünlüğü, tenant/ACL ve tam evidence referansı mekanik olarak
+doğrulanır; sonra her claim için query relevance ve her atıf için entailment aranır.
+Bir claim birden fazla belgeye atıf yapıyorsa belgelerin **tümü** eşiği geçmelidir; böylece
+destekli bir kaynağın yanına ilgisiz citation ekleyerek destek aklama reddedilir. Eşiklerin
+varsayılanı yoktur. Model adı, revision, positive-label sözleşmesi ve eşikler frozen,
+insan-onaylı calibration setinden açıkça verilmedikçe bu adapter production otoritesi değildir.
+Opsiyonel `TransformersTextPairScorer`, yalnız ilk kullanımda `.[embeddings]` bağımlılıklarını
+yükler ve model revision'ını `model_id` içine dahil eder.
+
 Resolver ve critic retrieval'dan ayrı frozen vakalarla ölçülür:
 
 ```powershell
@@ -127,9 +140,18 @@ python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 critic `
 
 python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 structured-critic `
   --cases sample-corpus/structured-critic-eval.json
+
+# Yalnız insan-onaylı frozen semantic vakalar/eşiklerle çalıştırın:
+python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 semantic-structured-critic `
+  --cases <human-reviewed-semantic-cases.json> `
+  --relevance-model <model> --relevance-revision <commit> `
+  --entailment-model <model> --entailment-revision <commit> `
+  --entailment-positive-label-index <index> `
+  --minimum-relevance <reviewed-threshold> `
+  --minimum-entailment <reviewed-threshold>
 ```
 
-Her iki kapı da false allow/accept, false refusal/reject, constraint/support mismatch ve
+Tüm kapılar false allow/accept, false refusal/reject, constraint/support mismatch ve
 duplicate vaka kimliklerini ayrıca raporlar. Örnekler sentetik mekanizma testidir; insan
 etiketli domain calibration veya production kalite iddiası değildir.
 
@@ -347,8 +369,8 @@ ruff check .
 
 1. Operatörce seçilmiş güvenli Vault alt kümesiyle 30–50 soruluk gerçek gold set.
 2. Yerel production adayı embedding modeli ve keyword/vector/hybrid karşılaştırması.
-3. Exact baseline'ın ötesinde insan-kalibreli semantic entailment critic ve cevap düzeyi
-   hallucination ölçümü.
+3. Uygulanan semantic critic adayını insan-onaylı paraphrase/negation/relevance setinde
+   kalibre etme; cevap düzeyi hallucination ölçümü ve false-accept=0 kapısı.
 4. Korpus 10.000 satıra yaklaşır veya exact p95 hedefi aşarsa ölçülmüş HNSW ayarını
    gerçek tenant/ACL dağılımında yeniden doğrulama; IVFFlat şimdilik seçilmedi.
 5. Sonuç kanıtı oluşunca Azure AI Search ve Foundry adapter'ları.

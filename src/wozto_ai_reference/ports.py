@@ -83,6 +83,15 @@ class EvidenceSupportCritic(Protocol):
     ) -> EvidenceSupportDecision: ...
 
 
+class TextPairScorer(Protocol):
+    """Score ordered text pairs on a caller-defined, calibrated 0..1 scale."""
+
+    async def score_pairs(
+        self,
+        pairs: Sequence[tuple[str, str]],
+    ) -> Sequence[float]: ...
+
+
 class DocumentStore(Protocol):
     async def upsert(self, document: Document) -> None: ...
 
