@@ -35,6 +35,21 @@ embeddings = [
   "torch>=2.4,<3",
   "transformers>=4.44,<6",
 ]
+# Cok-saglayicili LLM gateway adaptorleri. CEKIRDEGE DAHIL DEGIL: bu paketin hedefi
+# saglayici-notr bir cekirdek; iki satici SDK'sini zorunlu bagimlilik yapmak tam tersi
+# olurdu. `llm_gateway` cekirdegi ve TESTLERI bu extra OLMADAN kosar -- adaptorler SDK'yi
+# yalnizca __init__ icinde import eder (tests/test_llm_gateway_adapters.py bunu
+# `sys.modules[...] = None` ile kanitlar).
+# ⚠️ ALT SINIRLAR OLCULDU, uydurulmadi (2026-09-05, `pip index versions <paket>`):
+#   anthropic -> en guncel 1.4.0 | openai -> en guncel 3.8.0
+# Ust sinir bir sonraki ANA surumdur: iki SDK da ana surumde kiran degisiklik yapiyor
+# (anthropic 1.x httpx2'ye gecti ve `messages.create`ten `temperature`i KALDIRDI --
+# kurulu 1.4.0 imzasinda olculdu; openai 3.x kendi kiran turunu yapti) => acik ust
+# sinir, adaptorun bir gun sessizce yanlis parametre gondermesi demektir.
+llm = [
+  "anthropic>=1.4,<2",
+  "openai>=3.8,<4",
+]
 # MCP stdio sunucusu. CEKIRDEGE DAHIL DEGIL: protokol SDK'si bu paketin bulut-notr
 # cekirdegiyle ilgisiz bir bagimlilik yuzeyi. `mcp_server` modulu SDK'yi ancak
 # `main()` icinde import eder, boylece extra kurulu olmadan da import/test edilebilir

@@ -361,6 +361,119 @@ Sunucu **müşteri verisi taşımaz**: varsayılan korpus, HTTP demo'sunun kulla
 kümedir ve içine bilinçli olarak **başka bir tenant'a ait bir belge** konmuştur — sınır bozulursa
 onu yakalayacak pozitif kontrol budur.
 
+## LLM gateway (retry → circuit breaker → failover)
+
+`wozto_ai_reference.llm_gateway`, tek bir model sağlayıcısının kesintisini uygulamanın
+kesintisi olmaktan çıkarır. Yönlendirici üç karar verir ve başka hiçbir şey yapmaz:
+**aynı sağlayıcıda tekrar dene**, **bu sağlayıcıyı çağırmayı bırak**, **bir sonrakine
+geç**. İstemi düzenlemez, iki sağlayıcının çıktısını birleştirmez, reddedilen bir
+isteği başka sağlayıcıda "denemez".
+
+```powershell
+# Adaptörler opsiyoneldir; çekirdek ve testleri bu extra OLMADAN koşar.
+pip install -e ".[llm]"
+```
+
+### Davranış tablosu
+
+Tamamı `tests/test_llm_gateway_*.py`'den türetilmiştir — buradaki her satırın karşılığı
+koşan bir testtir. **Süre/latency rakamı yoktur**: bu paket hiçbir sağlayıcıya karşı
+performans ölçmedi, yalnız karar sırasını sınadı.
+
+| Hata | Sınıf | `idempotent=True` | `idempotent=False` |
+|---|---|---|---|
+| 429 rate limit (+ `Retry-After`) | `RateLimitError` (pre-send) | Retry-After kadar bekler, aynı sağlayıcıda tekrar | **Aynı** — 429 "işe başlamadım" demektir, kanıt vardır |
+| 503 / 529 | `ServerError` (pre-send) | Geri çekilmeli tekrar → failover | Aynı |
+| 500 / 502 / 504 | `AmbiguousServerError` | Tekrar → failover | **Yükseltilir**; tekrar da failover da YOK |
+| Zaman aşımı (gönderim sonrası) | `AmbiguousTimeoutError` | Tekrar → failover | **Yükseltilir** |
+| Bağlantı hatası | `ProviderConnectionError` | Tekrar → failover | **Yükseltilir** |
+| 401 / 403 | `AuthError` | **Beklemeden** doğrudan failover; aynı sağlayıcıya ikinci deneme yok | Aynı |
+| 400 / 422 | `BadRequestError` | Çağırana yükseltilir; failover YOK (ikinci sağlayıcı da aynı 400'ü verir) | Aynı |
+| İçerik reddi | `ContentPolicyError` | Çağırana yükseltilir; failover YOK | Aynı |
+| Adaptörden sınıflandırılamayan hata (ör. `TypeError`) | `UnclassifiedProviderError` | Failover — ama **aynı sağlayıcıda tekrar YOK** (şüpheli adaptörün kendisi) | **Yükseltilir**; `__cause__` orijinal hatadır |
+| N ardışık **sağlayıcı** hatası | devre kesici AÇILIR | Birincil `open_seconds` boyunca **hiç çağrılmaz**; yarı-açıkta tek yoklama | Aynı |
+| Her iki sağlayıcı da düştü | `AllProvidersUnavailable(queue_hint=True)` | Tasarruf modu yapılandırıldıysa şablon, yoksa hata | Aynı |
+
+Hangi testin neyi kanıtladığı: **statü → sınıf** eşlemesi `test_llm_gateway_adapters.py`de,
+**sınıf → davranış** (her iki sütun da) `test_llm_gateway_router.py` /
+`test_llm_gateway_stream.py`de. Belirsiz satırların ikisi de aynı davranış yolunu
+(`AmbiguousOutcomeError`) kullanır ve o yol `AmbiguousTimeoutError` üzerinden koşulur.
+
+⛔ **Devre kesici SAĞLAYICIYI çitler, İSTEĞİ değil.** `BadRequestError` /
+`ContentPolicyError` sağlayıcının sağlığı hakkında hiçbir şey söylemez ve kesici
+sayacına GİRMEZ; girseydi arka arkaya iki reddedilen istem, sapasağlam bir sağlayıcıyı
+`open_seconds` boyunca kapatır ve sıradaki ilgisiz çağıranı yedeğe sürerdi.
+
+⭐ **Belirsiz sonuç kuralı.** `idempotent=False`, "sonucun yan etkisi zaten bağlandı"
+demektir (gönderilen bir e-posta, yazılan bir satır, tahsil edilen bir tutar). İlk
+denemenin işlenip işlenmediği kanıtlanamıyorsa yönlendirici **durur ve belirsizliği
+çağırana verir**; onu uzlaştırabilecek tek taraf odur. "Yeniden deneme yok" ile
+"failover yok" AYNI korumadır: isteği başkasına göndermek de ikinci kez göndermektir.
+
+### Akış (stream) sözleşmesi
+
+1. **Failover yalnız istek sınırındadır.** Yedek sağlayıcı sıfırdan akar.
+2. Birincil **hiç delta üretmeden** düşerse failover şeffaftır — tüketiciye olay gitmez.
+3. Kısmi delta **çıktıktan sonra** düşerse `StreamRestarted(discarded_chars=N)` yayınlanır
+   ve **yedek sağlayıcının ilk delta'sından ÖNCE** gider.
+4. `StreamEnd.completion.text` **her zaman tek bir sağlayıcının tam metnidir** — asla
+   birleştirme değildir. Kırık bir akış tüketicide yarım cümle/kapanmamış JSON bırakır;
+   üstüne ikinci sağlayıcının metnini eklemek hiçbir modelin yazmadığı, tekrar
+   üretilemeyen bir metin doğurur çünkü dikiş yalnızca yönlendiricide vardır.
+5. `stream(req, buffered=True)`: delta'lar akış başarıyla bitene kadar tutulur ⇒ tüketici
+   kısmi çıktıyı **hiç görmez**, `StreamRestarted` de yayınlanmaz — yalnız deftere yazılır.
+6. Buffered modda **yeniden deneme bütçesi korunur**: tüketici hiçbir şey görmediği için
+   iç tampon atılıp AYNI sağlayıcı temiz bir istekle tekrar denenebilir. "Metin çıktıktan
+   sonra tekrar yok" kuralının gerekçesi tüketicinin görmüş olmasıdır; görmediyse gerekçe
+   de yoktur ve birincil ilk mikro kesintide gereksizce terk edilmez.
+7. Tüketici akıştan **çekilirse** (istemci koptu, `break`, iptal) yönlendirici o denemeyi
+   `outcome="abandoned"` satırıyla deftere yazar — sağlayıcı çağrılmıştı ve faturalanmış
+   olabilir. Devre kesiciye DOKUNULMAZ: başarısız olan sağlayıcı değil, giden tüketicidir.
+
+Testler iki tüketiciyi aynı olay akışına karşı koşturur: naif olarak birleştiren tüketici
+**yanlış** metin elde eder, `StreamRestarted`'da tamponunu sıfırlayan tüketici tam olarak
+`StreamEnd`'deki metni elde eder.
+
+### Defter (`AttemptLedger`)
+
+Her deneme — sağlayıcı, deneme no, sonuç, hata sınıfı, `latency_ms`, usage,
+`idempotency_key`, `request_id` — **append-only** bir JSONL satırıdır. Açık devre kesici
+yüzünden atlanan sağlayıcı da (`skipped_open_circuit`, `attempt=0`) yazılır: kesicinin
+ısırdığını başka hiçbir kayıt göstermez. `Usage.exact` yalnız sağlayıcı saydığında
+`True`'dur ve toplama alındığında yayılır — bir tahmin içeren toplam tahmindir.
+
+İki alan ayrı saatlerden gelir ve karıştırılmamalıdır: `ts` **duvar saatinden** yazılan
+bir ISO-8601 UTC dizgisidir ("bu istek ne zaman gitti"), `latency_ms` ise monotonik
+saatten ölçülen süredir. Her ikisi de ayrı ayrı enjekte edilebilir (`clock`,
+`wall_clock`). Çağıran kendi satırlarını `Completion.request_id` ile bulur — cevabın
+kendisi defterin anahtarını taşır.
+
+### Bilinen sınırlar (henüz KAPATILMADI)
+
+Bunlar bilinen ve bilinçli açık kalemlerdir; "yok" sanılmasınlar diye burada duruyorlar.
+
+* **Kesilme (truncation) yüzeye çıkmıyor.** `stop_reason == "max_tokens"` (Anthropic) /
+  `finish_reason == "length"` (OpenAI), çağırana yarım bir metnin TAM cevap gibi
+  dönmesi demektir; adaptörler bunu ne bir alana yazıyor ne de bir hataya çeviriyor.
+* **`_last_usage` adaptör başına DEĞİŞKEN durumdur.** Değişmez şart: atama ile okuma
+  arasında `await` YOKTUR. Aynı adaptör örneğini eşzamanlı iki akışta kullanmak bu şartı
+  bozar ve biri ötekinin token sayısını okur. Bugün korunuyor, ama tip sistemiyle değil
+  disiplinle.
+* **`ProviderTimeoutError` dışa aktarılıyor ama hiçbir adaptör ÜRETMİYOR.** SDK zaman
+  aşımı `AmbiguousTimeoutError`'a eşlenir (gönderim sonrası zaman aşımının ne olduğu
+  kanıtlanamaz). Sınıf, pre-send'i kanıtlayabilen bir adaptör için duruyor; tabloda
+  satırı yoktur çünkü bugün hiçbir yol oraya çıkmıyor.
+* **OpenAI adaptöründeki çok-choice birleştirmesi bugün ERİŞİLEMEZ.** `n` parametresi
+  gönderilmediği için cevap tek choice taşır; birleştirme kodu ileriye dönük ve
+  sınanmamış bir daldır.
+* **Canlı sağlayıcı çağrısı YAPILMADI.** Bütün adaptör testleri sahte SDK istemcileriyle
+  koşar; SDK eşlemesi kurulu paketler *okunarak* doğrulandı, ağ üzerinden değil.
+
+⚠️ Bu katman **canlı model çağrısıyla ölçülmedi**. Adaptörlerin SDK eşlemesi kurulu
+`anthropic==1.4.0` / `openai==3.8.0` üzerinden *okunarak* doğrulandı (istisna sınıf
+adları, sınıf hiyerarşisi, imza parametreleri, `retry-after-ms` başlık önceliği), ama
+gerçek bir 429 veya kesinti senaryosu üretimde tekrar edilmedi.
+
 ## Doğrulama
 
 ```powershell

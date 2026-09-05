@@ -20,6 +20,30 @@ sonucuna körü körüne güvenmeden tenant, ACL, abstention ve citation kuralla
 | `EvidenceSupportCritic` | opt-in exact + threshold semantic structured claim critic'leri | insan-kalibreli production judge |
 | `TextPairScorer` | opsiyonel pinned Transformers sequence classifier | yerel ONNX/OpenVINO, cloud classifier |
 | `TelemetryProvider` | `MemoryTelemetry` | OpenTelemetry, Azure Monitor/Application Insights |
+| `ChatProvider` (llm_gateway) | `ScriptedProvider` + opsiyonel Anthropic/OpenAI adapter'ları | başka satıcı SDK'sı, self-hosted vLLM/Ollama |
+
+## LLM gateway (`llm_gateway`)
+
+`ModelProvider` grounded cevap portudur (retrieval hit'leri alır, citation sözleşmesine
+bağlıdır); `ChatProvider` onun altındaki ham sohbet katmanıdır ve retrieval'dan haberi
+yoktur — bu yüzden ayrı bir porttur, `ModelProvider`'ı genişletmek her RAG adapter'ına
+işine yaramayan sohbet parametreleri eklerdi. `FailoverRouter` bu katmanda
+birincil/yedek sağlayıcı arasında retry → circuit breaker → failover uygular ve üç sınırı
+aynı fail-closed mantıkla kurar: (a) sağlayıcı SDK'ları **opsiyonel extra**dır, yalnız
+adapter kurulurken import edilir, çekirdek satıcı-nötr kalır; (b) yan etkisi olan bir
+istek (`idempotent=False`), ilk denemenin işlenip işlenmediği kanıtlanamıyorsa **ikinci
+kez gönderilmez** — ne aynı sağlayıcıya ne yedeğe; belirsizlik çağırana yükseltilir,
+çünkü onu uzlaştırabilecek tek taraf odur; (c) akışta failover yalnız istek sınırındadır
+ve `StreamEnd` her zaman **tek bir sağlayıcının tam metnini** taşır, iki sağlayıcının
+çıktısı asla birleştirilmez. Her deneme append-only bir `AttemptLedger` satırı üretir;
+bu defter `TelemetryProvider`'dan ayrıdır çünkü örneklenemez, gruplanamaz ve yeniden
+kurgulanabilir olmak zorundadır. Defterin kapsama kuralının istisnası yoktur:
+**sağlayıcı çağrıldıysa satırı vardır.** Bu yüzden taksonomi dışı bir adaptör hatası
+(`UnclassifiedProviderError`; belirsiz sayılır, çünkü sınıflandırılamayan bir istisna
+isteğin ulaşmadığının kanıtı değildir) ve tüketicinin akıştan çekilmesi
+(`outcome="abandoned"`) de yazılır — ikisi de daha önce hiç iz bırakmadan geçebiliyordu.
+Devre kesici yalnız **sağlayıcı** arızasını sayar: `BadRequestError` /
+`ContentPolicyError` isteğin kusurudur ve sağlıklı bir sağlayıcıyı çitlememelidir.
 
 ## Güven sınırları
 
@@ -66,5 +90,8 @@ sonucuna körü körüne güvenmeden tenant, ACL, abstention ve citation kuralla
   bu bileşen hard policy'nin veya kaynak metadata doğrulamasının yerine geçmez,
 - prompt injection ve cross-tenant negatif testleri,
 - OpenTelemetry trace, latency, token ve cost-per-task ölçümü,
-- retry/idempotency, queue/DLQ ve restore tatbikatı,
+- queue/DLQ ve restore tatbikatı; `llm_gateway` `AllProvidersUnavailable(queue_hint=True)`
+  ile kuyruğa alınması gerektiğini SÖYLER ama kuyruğun kendisi bu pakette YOKTUR ve
+  gateway hiçbir canlı sağlayıcı kesintisine karşı ölçülmedi (SDK eşlemesi kurulu
+  paketten okunarak doğrulandı, üretimde tekrar edilmedi),
 - Azure adapter'ı için Managed Identity/Key Vault/RBAC ve private-network kararı.
