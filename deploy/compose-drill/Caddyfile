@@ -1,0 +1,20 @@
+# Internal-CA TLS for the drill. `tls internal` makes Caddy mint a local CA and sign
+# leaf certificates for these names. That proves the proxy + certificate chain, NOT
+# public issuance: there is no ACME, no public DNS, no domain ownership here.
+{
+	# admin API stays on loopback inside the container; the healthcheck reads it
+	admin 127.0.0.1:2019
+	auto_https disable_redirects
+}
+
+app.drill.internal {
+	tls internal
+	reverse_proxy app:8000
+}
+
+n8n.drill.internal {
+	tls internal
+	# n8n derives its production webhook URL from WEBHOOK_URL/N8N_HOST, and trusts one
+	# proxy hop (N8N_PROXY_HOPS=1) for the X-Forwarded-* headers Caddy sets.
+	reverse_proxy n8n:5678
+}

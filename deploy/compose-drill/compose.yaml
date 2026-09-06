@@ -1,0 +1,293 @@
+# Deployment drill stack (single node): Postgres + app + Caddy (internal TLS) + n8n + task runner.
+#
+# Project name is pinned to `drill` so it can never collide with another stack on the
+# same daemon. Every image is pinned to an exact tag that was `docker pull`-verified in
+# the drill run recorded in DRILL-2026-09-06.md; `latest` is never used.
+#
+#   docker compose -p drill up -d --build     (or: scripts/up.sh)
+#
+# Secrets are files, never inline values. Generate them with scripts/gen_secrets.sh;
+# the whole secrets/ directory is git-ignored.
+name: drill
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  # ---------------------------------------------------------------------------
+  # Postgres — one server, two databases, two roles.
+  #   drill_app : owned by the superuser role the API uses
+  #   drill_n8n : owned by a separate role that cannot connect to the app database
+  # `--data-checksums` is an INIT-TIME argument: it can only be chosen when the data
+  # directory is created. Turning it on later means dump + re-initdb + restore.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg17-trixie
+    environment:
+      POSTGRES_DB: drill_app
+      POSTGRES_USER: drill_app
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --data-checksums
+      # consumed by initdb/10-drill-n8n-db.sh (first boot only)
+      DRILL_N8N_DB: drill_n8n
+      DRILL_N8N_USER: drill_n8n
+    secrets:
+      - postgres_password
+      - n8n_db_password
+    volumes:
+      - drill-pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # MEASURED IN THIS DRILL: `pg_isready` alone is NOT enough. When the init script
+      # failed, the entrypoint aborted, `restart: unless-stopped` restarted the
+      # container, the second boot found a non-empty PGDATA and SKIPPED initialisation
+      # entirely - and pg_isready then reported the server healthy with the n8n role
+      # missing. Evidence: RestartCount=1 and "database system is ready to accept
+      # connections" logged twice. So the healthcheck also asserts that the object the
+      # init script was supposed to create actually exists.
+      test:
+        - CMD-SHELL
+        - pg_isready -U drill_app -d drill_app && psql -U drill_app -d drill_app -tAc "SELECT count(*) FROM pg_roles WHERE rolname = 'drill_n8n'" | grep -qx 1
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    <<: *hardening
+    # MEASURED: read_only rootfs works once the paths Postgres writes outside its data
+    # directory are tmpfs.
+    # cap_drop: [ALL] is deliberately ABSENT here, and that is a measurement, not an
+    # oversight: with it the entrypoint crash-loops on
+    #   chmod: changing permissions of '/var/lib/postgresql/data': Operation not permitted
+    # (exit 1, 8 restarts in 25s). The image starts as root to fix ownership of the data
+    # directory before dropping to the postgres user, which needs CHOWN/FOWNER/DAC_OVERRIDE
+    # plus SETUID/SETGID. Dropping all capabilities would require pre-owned storage and a
+    # different entrypoint - out of scope for this drill.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+      - /run
+
+  # ---------------------------------------------------------------------------
+  # The repository API (src/wozto_ai_reference/api.py) against the pgvector backend.
+  # PgVectorStore refuses a password embedded in the URL, so the entrypoint builds a
+  # 0600 libpq passfile on tmpfs from the mounted secret. No password in env or image.
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/compose-drill/Dockerfile.app
+    image: drill-app:local
+    environment:
+      WOZTO_REFERENCE_BACKEND: pgvector
+      WOZTO_REFERENCE_DATABASE_URL: postgresql://drill_app@postgres:5432/drill_app
+      # /ready deliberately answers 503 while no trusted identity provider is wired
+      # (see api.py). Liveness therefore uses /health, which is only reachable after
+      # the lifespan hook has created the schema against Postgres.
+      WOZTO_REFERENCE_ALLOW_INSECURE_HEADERS: "0"
+      DRILL_DB_HOST: postgres
+      DRILL_DB_PORT: "5432"
+      DRILL_DB_NAME: drill_app
+      DRILL_DB_USER: drill_app
+      DRILL_DB_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 5s
+    restart: unless-stopped
+    <<: *hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+
+  # ---------------------------------------------------------------------------
+  # Caddy terminates TLS with its own internal CA (`tls internal`). No ACME, no public
+  # domain: the drill proves the proxy + certificate path, not public issuance.
+  # Ports are bound to 127.0.0.1 only and use a high range so nothing collides.
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2.10.2
+    ports:
+      - "127.0.0.1:18080:80"
+      - "127.0.0.1:18443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - drill-caddy-data:/data
+      - drill-caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    <<: *hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Caddy runs as root in the official image; without this capability it cannot bind
+    # 80/443. Everything else is dropped.
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  # ---------------------------------------------------------------------------
+  # n8n, Postgres-backed, external task runners, telemetry off, retention bounded.
+  # Encryption key and DB password arrive through *_FILE secrets (verified by
+  # observation in the drill, not assumed).
+  # ---------------------------------------------------------------------------
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.36.7
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: drill_n8n
+      DB_POSTGRESDB_USER: drill_n8n
+      DB_POSTGRESDB_PASSWORD_FILE: /run/secrets/n8n_db_password
+      DB_POSTGRESDB_SCHEMA: public
+      N8N_ENCRYPTION_KEY_FILE: /run/secrets/n8n_encryption_key
+      # behind the reverse proxy
+      N8N_HOST: n8n.drill.internal
+      N8N_PROTOCOL: https
+      N8N_PORT: "5678"
+      N8N_PROXY_HOPS: "1"
+      WEBHOOK_URL: https://n8n.drill.internal:18443/
+      GENERIC_TIMEZONE: UTC
+      # external task runners
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_RUNNERS_MODE: external
+      N8N_RUNNERS_AUTH_TOKEN_FILE: /run/secrets/runner_auth_token
+      N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+      # retention: decided up front, not after the disk fills
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+      # hardening / no outbound telemetry
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      # observability
+      N8N_LOG_FORMAT: json
+      N8N_LOG_LEVEL: info
+      N8N_METRICS: "true"
+    secrets:
+      - n8n_db_password
+      - n8n_encryption_key
+      - runner_auth_token
+    volumes:
+      - drill-n8n-data:/home/node/.n8n
+      # MEASURED: with read_only: true the daemon refuses `docker cp` INTO the container
+      # outright - "Error response from daemon: container rootfs is marked read-only" -
+      # even when the destination is a tmpfs path. Files that the n8n CLI has to read
+      # (workflow and credential JSON) are therefore mounted read-only instead of copied.
+      - ./workflows:/drill-workflows:ro
+      # MEASURED, and the reason this is long syntax instead of a line in `tmpfs:`:
+      # a short-syntax tmpfs inherits the mode of the directory that already exists in
+      # the image. /tmp exists as 1777 and is writable; /home/node/.cache does NOT exist,
+      # so Compose creates the mountpoint as 755 root:root and n8n (uid 1000) dies with
+      #   EACCES: permission denied, mkdir '/home/node/.cache/n8n'
+      # An explicit mode is therefore mandatory here.
+      - type: tmpfs
+        target: /home/node/.cache
+        tmpfs:
+          mode: 01777
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # /healthz alone only proves the port answers; readiness proves DB connected and
+      # migrations applied.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5678/healthz/readiness || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 10s
+    restart: unless-stopped
+    <<: *hardening
+    cap_drop:
+      - ALL
+    # MEASURED: read_only works, but only with a WRITABLE /home/node/.cache (see the
+    # volumes block). With /tmp alone n8n gets through its migrations and then dies
+    # generating static assets:
+    #   Error: ENOENT: no such file or directory, mkdir '/home/node/.cache'
+    # Beware when judging this: n8n answers /healthz/readiness with 200 BEFORE static
+    # asset generation finishes, so a container can report `healthy` and crash seconds
+    # later. "Healthy at t+60s" is not "stable" - check RestartCount too.
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # ---------------------------------------------------------------------------
+  # Task runner sidecar, same version tag as n8n.
+  #
+  # The n8n docs say the runner image cannot read file-based secrets ("variables with a
+  # _FILE suffix added will not be recognized"). MEASURED AGAINST 2.36.7, THAT IS NO
+  # LONGER TRUE - three controls against the live broker:
+  #   _FILE + correct token -> "Registered runner launcher-javascript/launcher-python"
+  #   _FILE + wrong token   -> never registers (broker rejects it)
+  #   no token variable     -> the launcher refuses to start:
+  #                            "Failed to load config: AuthToken: missing required
+  #                             value: N8N_RUNNERS_AUTH_TOKEN"
+  # So the file IS read, and if a future version stops reading it the failure is loud at
+  # startup, not silent. Re-run those three controls after a version bump.
+  # ---------------------------------------------------------------------------
+  n8n-runner:
+    image: n8nio/runners:2.36.7
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTH_TOKEN_FILE: /run/secrets/runner_auth_token
+      N8N_RUNNERS_MAX_CONCURRENCY: "5"
+      N8N_RUNNERS_TASK_TIMEOUT: "300"
+    secrets:
+      - runner_auth_token
+    depends_on:
+      n8n:
+        condition: service_healthy
+    restart: unless-stopped
+    <<: *hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+
+volumes:
+  drill-pgdata:
+  drill-caddy-data:
+  drill-caddy-config:
+  drill-n8n-data:
+
+# DRILL_SECRETS_DIR lets scripts/restore_drill.sh point a second, throw-away stack at a
+# restored encryption key without touching the live secrets directory.
+#
+# MEASURED: outside swarm, Compose v2.40.3 mounts these files with the HOST file's owner
+# and mode and warns that `uid`, `gid` and `mode` in the long syntax "are not supported,
+# they will be ignored". Since postgres (uid 999), n8n (1000) and the app (10001) run as
+# different users, file mode is handled on the host by scripts/gen_secrets.sh: the
+# directory is 0700, the files inside are 0644.
+secrets:
+  postgres_password:
+    file: ${DRILL_SECRETS_DIR:-./secrets}/postgres_password.txt
+  n8n_db_password:
+    file: ${DRILL_SECRETS_DIR:-./secrets}/n8n_db_password.txt
+  n8n_encryption_key:
+    file: ${DRILL_SECRETS_DIR:-./secrets}/n8n_encryption_key.txt
+  runner_auth_token:
+    file: ${DRILL_SECRETS_DIR:-./secrets}/runner_auth_token.txt

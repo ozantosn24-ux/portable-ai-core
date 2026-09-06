@@ -1,0 +1,10 @@
+# Real secret material and everything derived from it never enters git.
+# NOTE: `secrets/` (directory form) would make the negation below unreachable - git
+# does not descend into an excluded directory. The `secrets/*` form is required.
+secrets/*
+!secrets/*.example
+.env
+backups/
+key-backups/
+restore-secrets/
+ca.crt
