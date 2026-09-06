@@ -33,7 +33,7 @@ not prove is listed below, and every number in
 ```bash
 cd deploy/compose-drill
 
-scripts/gen_secrets.sh          # 4 secrets + .env, once
+scripts/gen_secrets.sh          # 4 secret files, once (no .env - see the script)
 scripts/up.sh                   # build + up, times it to ALL-healthy
 scripts/seed.sh                 # 1000 rows + marker, workflow, credential
 scripts/verify_tls.sh           # internal-CA TLS, with a negative control
