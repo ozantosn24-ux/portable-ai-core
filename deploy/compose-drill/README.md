@@ -186,9 +186,19 @@ restart keycloak` is the manual equivalent. Measured 2026-09-07; see
   Treat the timings as an order of magnitude, not as a capacity model.
 * **No ACME, no public domain.** `tls internal` proves the proxy and the chain; it proves
   nothing about public certificate issuance, renewal, DNS, or HSTS.
-* **No sustained load.** One webhook call is a smoke test. There is no concurrency,
-  soak, or failure-injection testing here, and no measurement of behaviour under memory
-  pressure.
+* **No capacity model — but no longer no load either.** `scripts/load.sh` +
+  `scripts/load_client.py` run a bounded load and soak measurement from a throwaway
+  container on the drill network, and one recorded run is in
+  [`LOAD-2026-09-07.md`](LOAD-2026-09-07.md): `/health` at concurrency 10/50/100, the n8n
+  production webhook at 5/20/50, and a 10-minute mixed soak — 166 026 requests, 0 errors,
+  `RestartCount=0` throughout. What it found: n8n saturates at ~14 req/s on 2 vCPU and
+  absorbs concurrency purely as latency (no 429s, no shedding, no dropped executions), at
+  ~2.83 KB of database per execution. What it still does not prove: `/query` was never
+  called, TLS handshake cost was excluded by keep-alive, the external runner was never
+  exercised (a NoOp workflow dispatches no task), no level was pushed until it failed, and
+  there is no failure injection. **Codespace ≠ VPS; sayılar mertebe, kapasite modeli
+  değil.** `load.sh` writes raw output to `load-out/`; that directory is runtime output, is
+  **not** yet covered by `.gitignore`, and should be deleted with the rest of the teardown.
 * **No secrets vault.** Secrets are files on disk protected by a directory mode. That is
   better than values in `compose.yaml` and much worse than a managed secret store with
   rotation and audit. There is no rotation drill here.

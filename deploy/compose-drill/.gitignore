@@ -8,3 +8,4 @@ backups/
 key-backups/
 restore-secrets/
 ca.crt
+load-out/
