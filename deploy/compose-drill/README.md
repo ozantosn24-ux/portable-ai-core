@@ -38,10 +38,13 @@ is published to the host; both are container-network only.
 
 ```bash
 cd deploy/compose-drill
-chmod +x scripts/*.sh           # the tree ships them mode 644; a fresh clone needs this
+chmod +x scripts/*.sh           # the tree ships them WITHOUT the execute bit (a clone shows
+                                #   644 or 666 depending on umask); a fresh clone needs this
 
 scripts/gen_secrets.sh          # 4 secret files, once (no .env - see the script)
 scripts/up.sh                   # build + up, times it to ALL-healthy
+                                #   (this is the moment to run the two port-claim
+                                #    verification commands under "Requirements" below)
 scripts/seed.sh                 # 1000 rows + marker, workflow, credential
                                 #   (restarts n8n mid-run to make the webhook answer 200)
 scripts/verify_tls.sh           # internal-CA TLS, with a negative control
@@ -55,12 +58,16 @@ scripts/restore_drill.sh        # fresh volume, restore, verify, tear down
 # added to a base stack that is ALREADY RUNNING - idp_up.sh creates Keycloak's role and
 # database idempotently first, then reads them back (see the initdb note below).
 scripts/idp_up.sh               # 3 more secret files, /etc/hosts entries, --profile idp up
-scripts/idp_check.sh            # end-to-end logins: alice / bob / mia, cross-user 403s, ledger rows
+scripts/idp_check.sh alice      # ONE user per run (default: alice); run all three to see
+scripts/idp_check.sh bob        #   the cross-user 403s and the ledger rows from each side
+scripts/idp_check.sh mia        #   (mia: summaries 200 on both mailboxes, draft 403)
 
 # ---- clean up ----
-docker compose -p drill down -v                 # base stack, volumes included
-docker compose -p drill --profile idp down -v   # when the idp profile was used
+docker compose -p drill --profile idp down -v   # ONE command tears down base + profile:
+                                                #   `down` is not scoped by profile, so a second
+                                                #   plain `down -v` only prints "No resource found"
 rm -f secrets/*.txt ca.crt                      # the *.example files stay
+rm -rf backups key-backups                      # backup.sh output (dumps + the key copy)
 
 # idp_up.sh appended two loopback entries to /etc/hosts and `down -v` does NOT remove
 # them. Rewrite the file rather than editing in place: where /etc/hosts is a bind mount
