@@ -1,0 +1,4 @@
+# Input for requirements-auth.lock. Mirrors the `auth` optional extra in pyproject.toml
+# EXACTLY; if that extra changes, change this file in the same commit and recompile.
+httpx>=0.28,<1
+joserfc>=1.7,<2

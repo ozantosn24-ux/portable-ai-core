@@ -40,12 +40,20 @@ scripts/verify_tls.sh           # internal-CA TLS, with a negative control
 scripts/backup.sh               # dumps + workflow export + key + manifest.json
 scripts/restore_drill.sh        # fresh volume, restore, verify, tear down
 
-docker compose -p drill down -v # clean up
+# optional `idp` profile (Keycloak 26.7.3 + OIDC-enabled app; see S2-DRILL-2026-09-06.md):
+scripts/idp_up.sh               # 3 more secret files, /etc/hosts entries, --profile idp up
+scripts/idp_check.sh            # end-to-end logins: alice / bob / mia, cross-user 403s, ledger rows
+
+docker compose -p drill down -v                 # clean up (base stack)
+docker compose -p drill --profile idp down -v   # clean up when the idp profile was used
 ```
 
 Requirements: Docker with Compose v2, `openssl`, `curl`, ~1 GB of RAM for the stack and
-about 1 GB of disk for images. Host ports used: `127.0.0.1:18080` and `127.0.0.1:18443`
-only — nothing else is published, and Postgres is not reachable from the host at all.
+about 1 GB of disk for images. Host ports used by the **base** stack: `127.0.0.1:18080` and
+`127.0.0.1:18443` only, and Postgres is not reachable from the host at all. The optional
+**`idp` profile publishes two more** — `127.0.0.1:8080` (Keycloak) and `127.0.0.1:8000`
+(the API directly, bypassing Caddy) — because an OIDC issuer must resolve to the *same* URL
+string from the host and from inside the network. See the header of `compose.idp.yaml`.
 
 ## What each piece is for
 
@@ -63,9 +71,17 @@ only — nothing else is published, and Postgres is not reachable from the host 
 
 * A pinned-image Compose stack comes up healthy from nothing, with the order enforced by
   health conditions rather than by `sleep`.
-* File-based secrets (`*_FILE`) are actually honoured — verified by observation: no
-  plaintext value in the container environment or in `docker inspect`, and the key n8n
-  persisted hashes identically to the key file it was told to read.
+* File-based secrets (`*_FILE`) are actually honoured **by the services that support
+  them** — verified by observation: no plaintext value in the container environment or in
+  `docker inspect`, and the key n8n persisted hashes identically to the key file it was
+  told to read.
+  ⚠️ **Keycloak is the measured exception.** 26.7.3 ignores both
+  `KC_BOOTSTRAP_ADMIN_PASSWORD_FILE` and `KC_DB_PASSWORD_FILE`, so the `idp` profile uses
+  an entrypoint shim that exports them into the process environment. For that container
+  the claim narrows to: nothing in `docker inspect` and nothing via `docker exec … env`,
+  but the values **are** readable in `/proc/1/environ`. Measurements and the exact errors
+  are in [`S2-DRILL-2026-09-06.md`](S2-DRILL-2026-09-06.md) §7–§8, and the trade-off is
+  recorded in [ADR 0009](../../docs/adr/0009-keycloak-file-secret-exception.md).
 * External n8n task runners register against the broker over an authenticated channel.
 * TLS terminates at the proxy with a certificate that verifies against a specific CA —
   and the same request fails without that CA.
@@ -98,9 +114,12 @@ only — nothing else is published, and Postgres is not reachable from the host 
 
 ## Secrets
 
-`scripts/gen_secrets.sh` writes four files into `secrets/`, and nothing else. All of it is
-git-ignored; only the `*.example` files are committed. There is deliberately no `.env`
-with a plaintext token in it — see the runner note in `compose.yaml`.
+`scripts/gen_secrets.sh` writes four files into `secrets/` for the base stack, and nothing
+else. `scripts/idp_up.sh` adds three more when the `idp` profile is used
+(`keycloak_db_password`, `keycloak_admin_password`, `session_secret`), so **seven**
+`*.example` files ship in total. All real secret material is git-ignored; only the
+`*.example` files are committed. There is deliberately no `.env` with a plaintext token in
+it — see the runner note in `compose.yaml`.
 
 The permission model is a measured compromise, not a preference: outside swarm mode
 Compose mounts a file secret with the **host** file's owner and mode and warns that

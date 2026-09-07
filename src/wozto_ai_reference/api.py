@@ -24,6 +24,50 @@ _BACKEND_ENV = "WOZTO_REFERENCE_BACKEND"
 _DATABASE_URL_ENV = "WOZTO_REFERENCE_DATABASE_URL"
 
 
+def _configured_identity() -> tuple[IdentityProvider, object] | None:
+    """Build the OIDC provider and its router, or `None` when the switch is off.
+
+    ⛔ VARSAYILAN KAPALI. Mevcut `/health` `/ready` `/query` davranışı birebir korunur
+    (`tests/test_api.py`e tek satır dokunulmadı).
+
+    ⚠️ ÖLÇÜLDÜ 2026-09-06 — buradaki eski cümle YANLIŞTI. *"Anahtar kapalıyken `identity`
+    alt paketi import EDİLMEZ"* yazıyordu; EDİLİR: anahtarı okuyabilmek için `config`
+    import edilir ve o da paketin **8 modülünü** yükler. Doğru ve önemli olan iddia şudur:
+    **`httpx` ve `joserfc` import EDİLMEZ**, yani `auth` extra'sı kurulu olmayan bir
+    kurulum etkilenmez. Kanıt: `test_switch_off_does_not_import_the_auth_extra`.
+
+    Anahtarı okumadan import etmemek için `os.getenv`i burada tekrarlamak gerekirdi; o da
+    "etkin"in tanımını iki yere yazmak demek (`_flag` "true"/"yes"/"on" da kabul eder) ve
+    ikisinin sessizce ayrışması bu kazançtan pahalıdır.
+
+    ⚠️ Anahtar AÇIKKEN `POST /query` herkese **503** döner ve bu bir arıza değil, bu
+    spike'ın bilinen sınırıdır: `OidcIdentityProvider.resolve()` başlık kimliğini
+    reddeder (principal imzalı ID token'dan ve sunucu oturumundan doğar), `/query` ise
+    hâlâ başlık yolunu kullanır. `/query`i oturuma bağlamak mevcut rotanın sözleşmesini
+    değiştirirdi; bu bilinçli olarak YAPILMADI ve README'de sınır olarak yazılıdır.
+    """
+
+    from .identity.config import identity_settings_from_env
+
+    settings = identity_settings_from_env()
+    if settings is None:
+        return None
+
+    from .identity.oidc import OidcIdentityProvider
+    from .identity.web import IdentityWeb, build_identity_router
+
+    provider = OidcIdentityProvider(settings.oidc)
+    router = build_identity_router(
+        IdentityWeb(
+            provider=provider,
+            sessions=settings.session_manager(),
+            grants=settings.grants,
+            ledger=settings.ledger,
+        )
+    )
+    return provider, router
+
+
 def _demo_service() -> QueryService:
     documents = [
         Document(
@@ -90,6 +134,11 @@ def create_app(
 ) -> FastAPI:
     if allow_insecure_identity is None:
         allow_insecure_identity = os.getenv(_LOCAL_IDENTITY_ENV) == "1"
+    identity_router: object | None = None
+    if identity is None:
+        configured = _configured_identity()
+        if configured is not None:
+            identity, identity_router = configured
     resolved_identity = identity or LocalHeaderIdentityProvider(enabled=allow_insecure_identity)
     if service is None:
         resolved_service, configured_initializer = _configured_service()
@@ -136,6 +185,9 @@ def create_app(
             source_status=payload.source_status,
             source_authority=payload.source_authority,
         )
+
+    if identity_router is not None:
+        app.include_router(identity_router)  # type: ignore[arg-type]
 
     return app
 

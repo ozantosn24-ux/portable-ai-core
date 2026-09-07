@@ -21,12 +21,12 @@ the request went out twice — becomes the thing it can hide.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..jsonl_ledger import append_jsonl, read_jsonl
 from .types import Usage
 
 # `abandoned`: sağlayıcı ÇAĞRILDI ama denemeyi ne başarı ne hata bitirdi — tüketici
@@ -107,16 +107,11 @@ class JsonlAttemptLedger:
         return self._path
 
     def append(self, record: AttemptRecord) -> None:
-        line = json.dumps(record.model_dump(), ensure_ascii=False, sort_keys=True)
-        # `newline=""` — Windows'ta metin modu "\n"i "\r\n"e çevirir ve JSONL dosyası
-        # platforma göre farklı baytlar taşır; aynı defteri iki makinede karşılaştıran
-        # (ya da satır uzunluğuna/hash'ine bakan) her araç bunu fark eder. Satır sonunu
-        # burada biz yazıyoruz, işletim sistemi değil.
-        with self._path.open("a", encoding="utf-8", newline="") as handle:
-            handle.write(f"{line}\n")
+        # Satır yazımının kendisi `..jsonl_ledger`da: `newline=""` (Windows'ta metin modu
+        # "\n"i "\r\n"e çevirir ve aynı defter iki makinede farklı baytlar taşır),
+        # `sort_keys`, `ensure_ascii=False` ve kayıt başına yeniden açma. O dersin tek bir
+        # kopyası olsun diye taşındı; ŞEMA burada kalır - defterin anlamı paylaşılmaz.
+        append_jsonl(self._path, record.model_dump())
 
     def read_all(self) -> list[AttemptRecord]:
-        if not self._path.exists():
-            return []
-        with self._path.open(encoding="utf-8") as handle:
-            return [AttemptRecord.model_validate(json.loads(line)) for line in handle if line.strip()]
+        return [AttemptRecord.model_validate(row) for row in read_jsonl(self._path)]

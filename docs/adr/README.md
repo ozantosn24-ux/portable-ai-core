@@ -15,4 +15,5 @@ status line pointing at its replacement.
 | [0005](0005-file-based-secrets-in-compose.md) | File-based secrets in Compose, and the mode trap that had to be measured | Accepted 2026-09-06 |
 | [0006](0006-healthy-is-not-stable.md) | "Healthy" is not "stable": health, readiness and restore are asserted, not reported | Accepted 2026-09-06 |
 | [0007](0007-tenant-acl-in-sql-and-fail-closed-identity.md) | Tenant and ACL are enforced inside the SQL query; identity defaults are fail-closed | Accepted 2026-09-06 — recorded retrospectively |
-| 0008 | OIDC login and resource-level authorization | Pending — number reserved until the identity spike lands |
+| [0008](0008-oidc-relying-party-and-mailbox-grants.md) | OIDC login and resource-level authorization: the grant table resolves the mailbox, never the request | Accepted 2026-09-06 |
+| [0009](0009-keycloak-file-secret-exception.md) | Keycloak cannot read file secrets — a measured, scoped exception | Accepted 2026-09-06 — amends [0005](0005-file-based-secrets-in-compose.md) |

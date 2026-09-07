@@ -62,6 +62,18 @@ jobs:
           python -m pip install --require-hashes -r requirements.lock
           python -m pip install --no-deps -e .
 
+      - name: Install `auth` extra (AYRI kilit, hash dogrulamali)
+        # `requirements.lock` CEKIRDEK bagimlilik kumesini pinler; `auth` opsiyonel bir
+        # extra'dir ve orada olmamasi eksiklik degil tasarim.
+        # ⚠️ Bu adim once `pip install "joserfc>=1.7,<2"` idi ve HATALIYDI: --require-hashes
+        # ile kurulmus bir ortama hash'siz ve PINSIZ bir bagimlilik agaci (cryptography,
+        # cffi, pycparser) getiriyordu -- tedarik zinciri garantisi tam da yeni kod icin
+        # deliniyordu. Artik ayri bir kilit var ve o da hash dogrulamali kuruluyor.
+        # `requirements-auth.lock`, `requirements-auth.in`den `-c requirements.lock` ile
+        # uretilir; ortak paketler (anyio, httpx, certifi, idna, h11, httpcore) cekirdek
+        # kilidiyle AYNI surume cozulur, yoksa iki kilit birbiriyle kavga ederdi.
+        run: python -m pip install --require-hashes -r requirements-auth.lock
+
       - name: Configure test-only libpq passfile
         run: |
           printf '%s\n' '127.0.0.1:5432:wozto_ref:wozto_ref:dummy-ci-pgvector-pw' > /tmp/wozto-pgpass
@@ -109,6 +121,44 @@ jobs:
             echo "KIRMIZI: env olmadan da atlanmadi - skip kosulu degismis, kapi olcmuyor"
             exit 1
           fi
+
+      - name: KAPI - identity testleri TOPLANDI ve KOSTU mu (ATLANMADI mi)
+        # Ayni ariza sinifi, ikinci kez: yukaridaki pgvector kapisi "CI yesil != CI
+        # olcuyor" dersinden dogdu. `identity` testleri opsiyonel bir extra'ya bagli, yani
+        # extra kurulmazsa toplama HATASI verir ya da (birisi bir gun `skipif` eklerse)
+        # sessizce atlanir. Iki durumu da burada kirmiziya cevirmek zorundayiz.
+        # SABIT SAYI YAZILMAZ: kapinin isi "kac test gecti" degil, (1) en az bir test
+        # gercekten kostu mu (2) hicbiri ATLANDI mi (3) toplama kirilmadi mi.
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_identity_oidc.py tests/test_identity_session.py \
+                           tests/test_identity_authz.py tests/test_identity_web.py \
+                           tests/test_identity_api_mount.py tests/test_identity_optional_dependency.py \
+                           -q -rs 2>&1 | tee /tmp/identity.out
+          grep -qE "^[0-9]+ passed" /tmp/identity.out \
+            || { echo "KIRMIZI: hic identity testi GECMEDI - suite toplanmamis olabilir"; exit 1; }
+          if grep -qi "skipped" /tmp/identity.out; then
+            echo "KIRMIZI: identity testi ATLANDI - kapi bakabildigi yerde geciyor"
+            exit 1
+          fi
+          echo "YESIL: identity testleri GERCEKTEN kostu"
+
+      - name: POZITIF KONTROL - cekirdek `auth` extra'si OLMADAN da kosuyor
+        # README ve pyproject bunu IDDIA ediyor. Iddiayi olcmeden yazmak, tam da bu
+        # deponun kacindigi sey olurdu. `joserfc` KASITLI kaldirilir: `identity` hala
+        # import edilebilmeli ve cekirdek suite yesil kalmali. Sonra geri kurulur.
+        run: |
+          set -o pipefail
+          python -m pip uninstall -y joserfc > /dev/null
+          # ⚠️ Kendi satirinda: `python -c "..." && echo ...` bicimi `set -e` altinda ATIL
+          # olurdu -- basarisiz bir import `&&`in solu oldugu icin kabugu durdurmaz, adim
+          # yesil kalirdi. Import KENDI komutu olarak kosar ki cikis kodu adimi dusursun.
+          python -c "import wozto_ai_reference.identity"
+          echo "YESIL: identity, extra kurulu DEGILKEN import edildi"
+          python -m pytest tests/test_identity_optional_dependency.py tests/test_api.py -q 2>&1 | tee /tmp/optdep.out
+          grep -qE "^[0-9]+ passed" /tmp/optdep.out \
+            || { echo "KIRMIZI: extra'siz yol kirmizi"; exit 1; }
+          python -m pip install --require-hashes -r requirements-auth.lock > /dev/null
 
       - name: Paketin geri kalani da kossun (regresyon)
         run: python -m pytest -q

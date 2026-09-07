@@ -1,0 +1,33 @@
+# The drill app image plus the `auth` extra.
+#
+# ⚠️ HONEST LIMITATION, stated where it happens: the base image installs its dependencies
+# from `requirements.lock` with `--require-hashes`. MEASURED in this drill
+# (`grep -iE '^httpx|^joserfc' requirements.lock`): the lock already carries
+# `httpx==0.28.1` hash-verified, and does NOT carry `joserfc` — so exactly ONE package is
+# added here, and it is added WITHOUT hash verification.
+#
+# That is acceptable for a drill and NOT acceptable for a deployment. Closing it means
+# regenerating `requirements.lock` with the extra included (`uv pip compile --universal
+# --python-version 3.14 --extra auth`) so the whole image stays hash-verified. That was
+# not done here: the lock is the repository's and regenerating it is a separate change.
+#
+# `joserfc` pulls `cryptography`, which is likewise unhashed in this layer.
+ARG BASE_IMAGE=drill-app:local
+FROM ${BASE_IMAGE}
+
+USER root
+RUN pip install --no-cache-dir "joserfc==1.7.5"
+
+# MEASURED in this drill, and the reason this line exists: a Docker NAMED VOLUME whose
+# mount point does not exist in the image is created `root:root 755`. The app runs as uid
+# 10001, so the first authorization decision died with
+#   PermissionError: [Errno 13] Permission denied: '/drill-ledger/decisions.jsonl'
+# Creating the directory in the image with the right owner makes Docker propagate that
+# ownership to the fresh volume. (Same class as the n8n `/home/node/.cache` mode problem
+# already recorded in compose.yaml — a mount point's ownership is an image concern.)
+#
+# ⭐ Worth keeping: the failure was FAIL-CLOSED. `authorize()` writes the ledger row before
+# it returns a decision, so an unwritable ledger produced a 500 — never an unlogged allow.
+RUN mkdir -p /drill-ledger && chown 10001:10001 /drill-ledger
+
+USER 10001

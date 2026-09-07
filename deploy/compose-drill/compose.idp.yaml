@@ -1,0 +1,177 @@
+# Compose OVERRIDE that adds an OpenID Provider to the drill stack.
+#
+#   docker compose -p drill -f compose.yaml -f compose.idp.yaml --profile idp up -d postgres keycloak app
+#   (or: scripts/idp_up.sh)
+#
+# It is an override, not a second stack: Postgres is the SAME server as the base drill,
+# with a THIRD database and role of its own (initdb/20-drill-keycloak-db.sh).
+#
+# ─── Two decisions that shape everything below ───────────────────────────────────
+#
+# 1. **`start-dev`, said out loud.** Keycloak runs in development mode. That disables the
+#    production hostname and TLS checks, uses a dev-grade cache, and is explicitly not a
+#    production posture. The drill proves the OIDC *protocol* path — discovery, PKCE,
+#    JWKS, claim mapping — not a hardened IdP deployment. `start` (production mode) would
+#    additionally require TLS material and a fixed hostname; that is a different drill.
+#
+# 2. **One hostname, resolvable from BOTH sides.** The issuer string in an ID token is
+#    compared byte-for-byte by the relying party, so the browser and the server must reach
+#    the IdP at the *same* URL. `idp.drill.internal:8080` resolves inside the Docker
+#    network via the service alias, and on the host via /etc/hosts + a published port on
+#    the SAME port number. Publishing on a different host port would produce two URLs for
+#    one issuer and the `iss` check would (correctly) fail.
+#
+# ⛔ Caddy is deliberately NOT put in front of the IdP here. Adding `idp.drill.internal` to
+#    the base Caddyfile would make the base stack advertise a host that exists only under
+#    this profile, and mounting a second Caddyfile would duplicate the base routes and
+#    invite drift. TLS termination is already proven in DRILL-2026-09-06.md; repeating it
+#    is not what this drill is for. Consequence, stated rather than hidden: this profile
+#    speaks plain HTTP, so the session cookie runs with `Secure=0` (see the app env below).
+
+services:
+  # Postgres gains a third database/role. The healthcheck is EXTENDED, not replaced:
+  # `initdb/*` only runs on an empty PGDATA, so a stack brought up on a pre-existing
+  # volume would start a Keycloak whose role does not exist. Asserting the object the init
+  # script was supposed to create is the same guard the n8n role already has.
+  postgres:
+    environment:
+      DRILL_KEYCLOAK_DB: drill_keycloak
+      DRILL_KEYCLOAK_USER: drill_keycloak
+    secrets:
+      - postgres_password
+      - n8n_db_password
+      - keycloak_db_password
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U drill_app -d drill_app
+          && psql -U drill_app -d drill_app -tAc "SELECT count(*) FROM pg_roles WHERE rolname = 'drill_n8n'" | grep -qx 1
+          && psql -U drill_app -d drill_app -tAc "SELECT count(*) FROM pg_roles WHERE rolname = 'drill_keycloak'" | grep -qx 1
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  keycloak:
+    profiles: ["idp"]
+    # PINNED, and the pin was produced by `docker pull` in the drill run recorded in
+    # S2-DRILL-2026-09-06.md — not copied from memory or from a docs page.
+    image: quay.io/keycloak/keycloak:26.7.3
+    # MEASURED, and the reason this shim exists at all: unlike every other service in this
+    # stack, Keycloak 26.7.3 does NOT read `*_FILE` secrets — neither the bootstrap admin
+    # password (crash loop) nor the database password (SCRAM failure). The shim maps
+    # `KC_<OPTION>_FILE` -> `KC_<OPTION>`; its header carries both exact errors and the
+    # cost of the workaround.
+    entrypoint: ["/drill-idp/keycloak-entrypoint.sh"]
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/drill_keycloak
+      KC_DB_USERNAME: drill_keycloak
+      KC_DB_PASSWORD_FILE: /run/secrets/keycloak_db_password
+      # Bir tek konak adı: hem tarayıcı hem sunucu aynı dizgiyi görür (yukarıdaki 2. karar).
+      KC_HOSTNAME: http://idp.drill.internal:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "false"
+      KC_BOOTSTRAP_ADMIN_USERNAME: drill-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/keycloak_admin_password
+      KC_LOG_LEVEL: info
+    secrets:
+      - keycloak_db_password
+      - keycloak_admin_password
+    volumes:
+      - ./idp/realm-drill.json:/opt/keycloak/data/import/realm-drill.json:ro
+      - ./idp/keycloak-entrypoint.sh:/drill-idp/keycloak-entrypoint.sh:ro
+    networks:
+      default:
+        aliases:
+          - idp.drill.internal
+    ports:
+      # Konak portu KONTEYNER portuyla AYNI olmak zorunda — issuer tek bir dizgidir.
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Keycloak 26 imajında curl/wget YOKTUR (UBI-micro tabanı). Sağlık ucu yönetim
+      # portundadır (9000), HTTP portunda değil. Bash'in /dev/tcp'si imajda çalışıyor ve
+      # bu drill'de ÖLÇÜLDÜ; `Ready` yanıtı gövdeden okunur, yalnız port açıklığından değil
+      # ("port açık != hazır" — bu tuzak n8n tarafında zaten bir kez ısırdı).
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 15s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # The repository API, now with the identity layer switched ON.
+  app:
+    profiles: ["idp"]
+    build:
+      context: ../..
+      dockerfile: deploy/compose-drill/idp/Dockerfile.app-auth
+    image: drill-app-auth:local
+    environment:
+      # Kimlik anahtarı AÇIK. Varsayılan kapalıdır; burada bilinçli açılıyor.
+      WOZTO_REFERENCE_OIDC_ENABLED: "1"
+      WOZTO_REFERENCE_OIDC_ISSUER: http://idp.drill.internal:8080/realms/drill
+      WOZTO_REFERENCE_OIDC_CLIENT_ID: drill-app
+      WOZTO_REFERENCE_OIDC_REDIRECT_URI: http://app.drill.internal:8000/auth/callback
+      WOZTO_REFERENCE_OIDC_SCOPES: "openid profile"
+      # Keycloak rolleri BURAYA koyar. Entra ID'de bu yol `roles` ya da `groups` olur —
+      # docs/identity-entra-migration.md tam karşılıkları taşır.
+      WOZTO_REFERENCE_OIDC_ROLES_CLAIM: realm_access.roles
+      WOZTO_REFERENCE_OIDC_TENANT_ID: tenant-drill
+      WOZTO_REFERENCE_SESSION_SECRET_FILE: /run/secrets/session_secret
+      # ⚠️ Düz HTTP profili (yukarıdaki Caddy kararı) => Secure bayrağı AÇIKÇA kapatılıyor.
+      # Varsayılan True'dur ve öyle kalır; bu satır tatbikata özgü bir istisnadır.
+      WOZTO_REFERENCE_SESSION_COOKIE_SECURE: "0"
+      WOZTO_REFERENCE_AUTHZ_GRANTS_PATH: /drill-idp/grants.json
+      WOZTO_REFERENCE_AUTHZ_LEDGER_PATH: /drill-ledger/decisions.jsonl
+    secrets:
+      - postgres_password
+      - session_secret
+    volumes:
+      - ./idp/grants.json:/drill-idp/grants.json:ro
+      # Defter kalıcı bir birimde: append-only olduğu ancak yeniden başlatmadan SONRA
+      # okunarak gösterilebilir.
+      - drill-authz-ledger:/drill-ledger
+    networks:
+      default:
+        aliases:
+          - app.drill.internal
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    # `read_only: true` KALDIRILIYOR (base'de açıktı): karar defteri diske yazılır.
+    # Birim yazılabilir olsa da kök dosya sistemi salt-okunur kalırsa append-only defter
+    # yazılamaz; burada birim var, kök dosya sistemi kısıtlaması bilinçle gevşetildi.
+    read_only: false
+
+volumes:
+  drill-authz-ledger:
+
+secrets:
+  keycloak_db_password:
+    file: ${DRILL_SECRETS_DIR:-./secrets}/keycloak_db_password.txt
+  keycloak_admin_password:
+    file: ${DRILL_SECRETS_DIR:-./secrets}/keycloak_admin_password.txt
+  session_secret:
+    file: ${DRILL_SECRETS_DIR:-./secrets}/session_secret.txt

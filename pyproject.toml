@@ -57,6 +57,25 @@ llm = [
 mcp = [
   "mcp>=1.2,<2",
 ]
+# OIDC login (authorization code + PKCE) + kaynak duzeyinde yetkilendirme.
+# CEKIRDEGE DAHIL DEGIL: `identity` alt paketi opsiyoneldir ve `api.py` onu yalnizca
+# WOZTO_REFERENCE_OIDC_ENABLED=1 iken import eder. Cekirdek ve testleri bu extra OLMADAN
+# kosar -- `httpx` ve `joserfc` ancak KULLANIM aninda import edilir
+# (tests/test_identity_optional_dependency.py bunu `sys.modules[...] = None` ile kanitlar).
+#
+# ⚠️ ALT SINIRLAR OLCULDU, uydurulmadi (2026-09-06,
+#   `.venv/Scripts/python.exe -m pip index versions <paket>`):
+#     httpx -> en guncel 0.28.1 | joserfc -> en guncel 1.7.5
+#   (bakilan alternatifler: authlib 1.8.0, pyjwt 2.13.0; secim gerekcesi
+#    src/wozto_ai_reference/identity/oidc.py modul docstring'inde)
+# Ust sinir bir sonraki ANA surumdur: acik ust sinir, imza dogrulamasinin bir gun
+# sessizce farkli davranmasi demektir.
+# `cryptography` BURADA YAZILMAZ -- joserfc'nin kendi bagimliligidir ve surumunu onun
+# pinlemesi gerekir; iki yerde pinlemek cozunurluk catismasi uretir.
+auth = [
+  "httpx>=0.28,<1",
+  "joserfc>=1.7,<2",
+]
 dev = [
   "httpx>=0.28,<1",
   "pytest>=8.3,<10",

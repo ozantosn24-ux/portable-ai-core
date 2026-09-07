@@ -14,13 +14,36 @@ sonucuna körü körüne güvenmeden tenant, ACL, abstention ve citation kuralla
 | `SearchProvider` | memory hybrid + `PgVectorStore` | Azure AI Search |
 | `EmbeddingProvider` | deterministic `HashEmbeddingProvider` | local embedding, cloud embedding |
 | `DocumentStore` | transaction'lı `PgVectorStore` | Azure Blob, S3/MinIO |
-| `IdentityProvider` | açıkça etkinleştirilen local header adapter | Entra ID, Keycloak/Authentik |
+| `IdentityProvider` | açıkça etkinleştirilen local header adapter · opt-in `OidcIdentityProvider` (authorization code + PKCE, Keycloak'a karşı ölçüldü) | Entra ID (`docs/identity-entra-migration.md`), Authentik |
+| `SessionStore` (identity) | `InMemorySessionStore` | Redis / PostgreSQL oturum deposu |
+| `GrantTable` · `DecisionLedger` (identity) | `InMemoryGrantTable` + `JsonlDecisionLedger` | DB destekli yetki tablosu, merkezî denetim günlüğü |
 | `QueryPolicy` | opt-in `DenyPhraseQueryPolicy` | merkezi policy engine / sınıflandırıcı + insan kuyruğu |
 | `QueryScopeResolver` | opt-in `ConfiguredPhraseScopeResolver` | insan-kalibreli zaman/otorite sınıflandırıcısı |
 | `EvidenceSupportCritic` | opt-in exact + threshold semantic structured claim critic'leri | insan-kalibreli production judge |
 | `TextPairScorer` | opsiyonel pinned Transformers sequence classifier | yerel ONNX/OpenVINO, cloud classifier |
 | `TelemetryProvider` | `MemoryTelemetry` | OpenTelemetry, Azure Monitor/Application Insights |
 | `ChatProvider` (llm_gateway) | `ScriptedProvider` + opsiyonel Anthropic/OpenAI adapter'ları | başka satıcı SDK'sı, self-hosted vLLM/Ollama |
+
+## Identity (`identity`)
+
+Bu alt paket **iki ayrı soruyu** ayrı katmanlarda cevaplar ve ayrı tutulmaları tasarımın
+kendisidir: `oidc` "bu kim" (imzası doğrulanmış bir ID token; `iss`/`aud`/`exp`/`iat`/`nbf`
+enjekte edilebilir saat ve SINIRLI kaymayla, `state`+`nonce` ile, `alg` izin listesi anahtar
+aranmadan ÖNCE), `session` "bu tarayıcı hâlâ o kişi mi" (çerezde yalnız **opak** bir kimlik;
+otorite sunucu tarafındaki kayıttadır, bu yüzden çıkış gerçekten çıkıştır ve login kimliği
+DÖNDÜRÜR), `authz` ise "bu kişi BU kutuya bunu yapabilir mi". Üçüncüsü ilk ikisinden
+kasıtlı olarak bağımsızdır: **IdP'de bir rol kazanmak bir kaynağa erişim kazanmak
+DEĞİLDİR.** Rol claim'i `Principal.roles`a taşınır ama posta kutusu kararını yalnız
+`MailboxGrant` tablosu verir ve **hedef kutu her zaman tablodan, principal üzerinden
+çözülür — istek girdisinden asla**; istekteki ad yalnızca bir arama anahtarıdır ve deftere
+"ne istenmişti" olarak yazılır. Her karar — izin de ret de — kararın kendisinden ÖNCE
+append-only bir JSONL satırı üretir; bu sıralama ölçüldü: defter yazılamadığında istek
+başarısız olur, **kayıtsız bir izin üretilmez**. Defter `llm_gateway.AttemptLedger` ile
+yazma ilkelerini (`newline=""`, kayıt başına `open()`, sıralı anahtarlar) `jsonl_ledger`
+üzerinden paylaşır ama ŞEMASINI paylaşmaz — yazmayı paylaşmak anlamı paylaşmak değildir.
+Üçüncü taraf bağımlılıklar (`httpx`, `joserfc`) opsiyonel `auth` extra'sındadır ve yalnız
+kullanım anında import edilir; `api.py` alt paketi ancak açık bir anahtarla mount eder,
+varsayılan KAPALIDIR.
 
 ## LLM gateway (`llm_gateway`)
 
@@ -77,11 +100,24 @@ Devre kesici yalnız **sağlayıcı** arızasını sayar: `BadRequestError` /
     root escape, symlink, binary içerik ve boyut sınırı ihlali fail-closed reddedilir.
 14. PostgreSQL tenant ve rol filtresini ranking'den önce uygular. Servis katmanı sonucu
     tekrar kontrol ederek defense-in-depth sağlar.
+    ⚠️ **Bu yolun testi YERELDE ATLANIR, CI'da ATLANMAZ** — ve fark önemlidir.
+    `tests/test_pgvector_integration.py` `WOZTO_REFERENCE_TEST_DATABASE_URL` yoksa
+    kendini skip eder, yani yerel `pytest -q` bu iddiayı hiç ölçmeden yeşil verir. CI'da
+    ise gerçek Postgres bağlanır **ve bir kapı skip'i KIRMIZIYA çevirir** (`ci.yml`,
+    "KAPI - test ATLANMADI mi"), üstüne pozitif kontrolü de koşar. [ADR 0007](adr/0007-tenant-acl-in-sql-and-fail-closed-identity.md)
+    bunu "yalnız opt-in bir test" diye tarif ediyor; ADR'ler düzenlenmez, o yüzden
+    güncel durum burada yazılı.
 15. Kaynak güncellemesi eski chunk'ları silip yeni sürümü aynı transaction'da yazar.
 
 ## Production'a geçmeden önce açık kapılar
 
-- JWT doğrulayan identity adapter ve tenant'ın doğrulanmış claim'den türetilmesi,
+- ⭐ **Bu kalemin YARISI kapandı.** JWT doğrulayan identity adapter artık VAR
+  (`identity.oidc`: imza + `iss`/`aud`/`exp`/`iat`/`nbf` + `nonce`, gerçek Keycloak'a karşı
+  ölçüldü → `deploy/compose-drill/S2-DRILL-2026-09-06.md`, karar → [ADR 0008](adr/0008-oidc-relying-party-and-mailbox-grants.md)).
+  **Açık kalan yarı: tenant'ın doğrulanmış claim'den türetilmesi.** `tenant_claim_path`
+  claim'i `Principal.tenant_id`e taşır, ama bunun BEKLENEN bir tenant olduğunu doğrulayan
+  bir allowlist yoktur; tek kiracıda `iss` eşitliği bunu örter, çok kiracıda örtmez
+  (`docs/identity-entra-migration.md` §7),
 - parser sürümü/provenance ve silinen manifest kaynakları için reconciliation,
 - gerçek kullanıcı sorularından en az 30–50 vakalık lexical/vector/hybrid retrieval eval,
 - semantic critic için insan-onaylı paraphrase/negation/query-relevance seti, pinned model
@@ -90,8 +126,13 @@ Devre kesici yalnız **sağlayıcı** arızasını sayar: `BadRequestError` /
   bu bileşen hard policy'nin veya kaynak metadata doğrulamasının yerine geçmez,
 - prompt injection ve cross-tenant negatif testleri,
 - OpenTelemetry trace, latency, token ve cost-per-task ölçümü,
-- queue/DLQ ve restore tatbikatı; `llm_gateway` `AllProvidersUnavailable(queue_hint=True)`
-  ile kuyruğa alınması gerektiğini SÖYLER ama kuyruğun kendisi bu pakette YOKTUR ve
-  gateway hiçbir canlı sağlayıcı kesintisine karşı ölçülmedi (SDK eşlemesi kurulu
-  paketten okunarak doğrulandı, üretimde tekrar edilmedi),
+- queue/DLQ; `llm_gateway` `AllProvidersUnavailable(queue_hint=True)` ile kuyruğa alınması
+  gerektiğini SÖYLER ama kuyruğun kendisi bu pakette YOKTUR ve gateway hiçbir canlı
+  sağlayıcı kesintisine karşı ölçülmedi (SDK eşlemesi kurulu paketten okunarak
+  doğrulandı, üretimde tekrar edilmedi).
+  ⚠️ **"restore tatbikatı" bu kalemden ÇIKARILDI** — yapıldı ve ölçüldü:
+  `deploy/compose-drill/DRILL-2026-09-06.md §5` (boş birime geri yükleme + satır sayısı,
+  içerik digest'i, tablo sahipliği, workflow varlığı, readiness ve credential çözme
+  kontrolleri). Kapanmış bir kapıyı açık listesinde tutmak, listenin tamamının güvenini
+  düşürür,
 - Azure adapter'ı için Managed Identity/Key Vault/RBAC ve private-network kararı.

@@ -474,13 +474,158 @@ Bunlar bilinen ve bilinçli açık kalemlerdir; "yok" sanılmasınlar diye burad
 adları, sınıf hiyerarşisi, imza parametreleri, `retry-after-ms` başlık önceliği), ama
 gerçek bir 429 veya kesinti senaryosu üretimde tekrar edilmedi.
 
+## Identity (OIDC login + kaynak düzeyinde yetkilendirme)
+
+`wozto_ai_reference.identity`, "bu isteği kim yapıyor" ve "bu kişi BU posta kutusuna bunu
+yapabilir mi" sorularını **ayrı** üç katmanda cevaplar. Üçü ayrı, çünkü üçü ayrı biçimde
+yanlış gidiyor: kimlik doğrulaması imzayla, oturum sürekliliği sunucu tarafı bir kayıtla,
+yetki ise bir **yetki tablosuyla** korunur.
+
+```powershell
+# Opsiyoneldir; çekirdek ve testleri bu extra OLMADAN koşar.
+pip install -e ".[auth]"
+```
+
+* **`oidc`** — authorization code + PKCE (S256). ID token'ın imzası JWKS'ten doğrulanır
+  (önbellekli; bilinmeyen `kid` görülünce **bir kez** yeniden çekilir, hâlâ yoksa reddedilir),
+  `iss`/`aud`/`exp`/`iat`/`nbf` enjekte edilebilir bir saatle ve **sınırlı** kaymayla
+  sınanır, `state` ve `nonce` karşılaştırılır. `alg` izin listesi **çağrı yerindedir** ve
+  anahtar aranmadan ÖNCE sınanır. Rol/grup claim yolu yapılandırılabilir
+  (`realm_access.roles`, `roles`, `groups`…).
+* **`session`** — sunucu tarafı oturum deposu (bellek-içi varsayılan + takas edilebilir bir
+  Protocol), imzalı `HttpOnly` `SameSite=Lax` çerezde **yalnız opak bir oturum kimliği**.
+  Login'de kimlik döndürülür ve eskisi silinir (fixation savunması); çıkış sunucudan siler;
+  oturum başına CSRF token'ı.
+* **`authz`** — `authorize(principal, resource, action) -> Decision`, `MailboxGrant`
+  tablosuyla. **Hedef posta kutusu HER ZAMAN tablodan, principal üzerinden çözülür; istek
+  girdisinden ASLA.** Her karar — izin de ret de — tek bir append-only JSONL satırı yazar.
+
+⭐ **Anahtar varsayılan olarak KAPALI**; mevcut uygulama ve `tests/test_api.py` birebir
+aynı kalır. ⚠️ Sınırı ÖLÇÜLMÜŞ hâliyle yazalım (2026-09-06): `api.py` anahtarı okuyabilmek
+için `identity` alt paketinin **8 modülünü import EDER** — ama `httpx` ve `joserfc`yi
+**ETMEZ**. Önemli olan ikincisidir: `auth` extra'sı kurulu olmayan bir kurulum etkilenmez.
+Kanıt `test_switch_off_does_not_import_the_auth_extra`.
+
+### Yapılandırma (anahtar açıkken hepsi ZORUNLU)
+
+| Ortam değişkeni | Ne işe yarar |
+|---|---|
+| `WOZTO_REFERENCE_OIDC_ENABLED` | `1` olmadan hiçbir şey mount edilmez (varsayılan kapalı) |
+| `WOZTO_REFERENCE_OIDC_ISSUER` | IdP'nin `iss` olarak yazdığı dizginin BİREBİR kendisi |
+| `WOZTO_REFERENCE_OIDC_CLIENT_ID` | `aud` bununla karşılaştırılır |
+| `WOZTO_REFERENCE_OIDC_REDIRECT_URI` | IdP'de kayıtlı olanla birebir aynı olmalı |
+| `WOZTO_REFERENCE_SESSION_SECRET` / `..._FILE` | çerez imzalama anahtarı (en az 32 bayt) |
+| `WOZTO_REFERENCE_AUTHZ_GRANTS_PATH` | yetki tablosu JSON'u; **yoksa başlangıçta hata** |
+| `WOZTO_REFERENCE_AUTHZ_LEDGER_PATH` | karar defterinin JSONL yolu; **yoksa başlangıçta hata** |
+
+Opsiyoneller: `..._OIDC_SCOPES`, `..._OIDC_ROLES_CLAIM` (varsayılan `realm_access.roles`),
+`..._OIDC_TENANT_CLAIM`, `..._OIDC_TENANT_ID`, `..._OIDC_TOKEN_AUTH_METHOD`,
+`..._SESSION_TTL_SECONDS`, `..._SESSION_COOKIE_SECURE` (varsayılan `1`).
+
+🔴 **`AUTHZ_LEDGER_PATH` neden ZORUNLU?** Eskiden yoksa bellek-içi deftere düşülüyordu ve
+bu SESSİZ bir denetim kaybıydı: uygulama çalışır görünür, kararlar doğru alınır, hiçbir
+kapı ötmez — ama sürecin ömrü boyunca biriken bütün izin/ret satırları yeniden başlatmada
+yok olurdu. Kalıcı olmayan bir defter defter değildir
+(`test_missing_ledger_path_fails_closed_instead_of_falling_back_to_memory`).
+
+### Davranış tablosu
+
+Tamamı `tests/test_identity_*.py`'den türetilmiştir — buradaki her satırın karşılığı koşan
+bir testtir. **Süre/latency rakamı yoktur**; ölçülen tek zaman tatbikatındır
+([`S2-DRILL-2026-09-06.md`](deploy/compose-drill/S2-DRILL-2026-09-06.md)).
+
+| Durum | Sonuç | Neden |
+|---|---|---|
+| Geçerli kod + eşleşen `state` + eşleşen `nonce` | 303 → oturum çerezi → `/me` principal'i gösterir | mutlu yol |
+| `state` bu oturumun başlattığı değer değil | 400 `state_mismatch`, **kod HİÇ harcanmaz** | tek kontrol, kodu harcamadan yapılabilir |
+| ID token'daki `nonce` farklı | 400 `nonce_mismatch` | token tekrar oynatma |
+| `exp` geçmişte (kayma penceresinin dışında) | 400 `token_expired` | pencere İÇİNDE kalan token kabul edilir (pozitif kontrol) |
+| `iat` gelecekte | 400 `issued_in_future` | saat kayması sınırlıdır, sınırsız değil |
+| `aud` bizim client değil | 400 `audience_mismatch` | başka uygulamanın token'ı |
+| `iss` yapılandırılan issuer değil | 400 `issuer_mismatch` | sabit-zamanlı karşılaştırma |
+| `alg` izin listesinde değil | 400 `algorithm_not_allowed`, **JWKS'e HİÇ gidilmez** | `alg:none` / HS-RS karışıklığı imza koduna girmeden kapanır |
+| Bilinmeyen `kid` | **tam bir** JWKS yenilemesi, sonra 400 `unknown_signing_key` | rotasyon yenilemeyle çözülürse KABUL (pozitif kontrol) |
+| Aynı bilinmeyen `kid` tekrar tekrar | ek yenileme YOK (varsayılan 300 sn) | uç nokta IdP'ye karşı yükseltme aracı olmamalı |
+| Keşif belgesinin `issuer`'ı yapılandırmayla eşleşmiyor | `discovery_issuer_mismatch` | yanlış kiracıya bakıyor olabiliriz |
+| Login | çerez değeri DEĞİŞİR, eski kayıt SİLİNİR | session fixation |
+| Çıkıştan sonra eski çerez | 401 | otorite sunucuda, çerezde değil |
+| Çerez imzası kurcalanmış | 401, depoya HİÇ bakılmaz | |
+| `/auth/logout` ya da `POST .../drafts` CSRF'siz | 403, **deftere karar YAZILMAZ** | değerlendirilmemiş istek karar değildir |
+| alice (`sales-a` sahibi) → `sales-b` read/draft/send | deny `no_grant_for_mailbox` + defter satırı | yetki KUTU BAŞINADIR |
+| bob (`sales-b` sahibi) → `sales-a` | aynı | |
+| Yetkisi olmayan bir kutu adı (başka kutuda sahip olsa bile) | deny `no_grant_for_mailbox` | "bir yerde sahibim" hiçbir yerde yetki değildir |
+| mia (`manager_view`) → `view_summary` (iki kutu) | allow | |
+| mia → `draft` / `send` | deny `role_forbids_action` | |
+| owner / delegate → read·draft·send·view_summary | allow | `manager_view`in ÜST kümesi (aşağıdaki nota bakın) |
+| Her izin ve her ret | **tam olarak bir** defter satırı | kapsama kuralının istisnası yok |
+| İki ayrı koşu, aynı dosya | ilk koşunun baytları BİREBİR durur | append-only |
+| Yetki tablosu değişti | sonraki istekte etkili, yeniden login GEREKMEZ | iptal, en çok gerektiği anda çalışmalı |
+
+⭐ **`owner`/`delegate` `view_summary`yi de taşır.** `manager_view` "YALNIZ özet" demektir,
+tersi değil: kendi kutusunun özetini göremeyen bir sahip güvenlik özelliği değil arızadır.
+Tablo bir üst-küme ilişkisidir.
+
+⛔ **Yetki, ID token'ın rolünden GELMEZ.** Keycloak rolleri (`realm_access.roles`)
+`Principal.roles`a taşınır ama posta kutusu kararını **yetki tablosu** verir. IdP'de bir rol
+kazanmak, bir kutuya erişim kazanmak DEĞİLDİR — bu ayrım Entra ID'de de aynen korunur
+([`docs/identity-entra-migration.md`](docs/identity-entra-migration.md)).
+
+### Bilinen sınırlar (henüz KAPATILMADI)
+
+Bunlar bilinen ve bilinçli açık kalemlerdir; "yok" sanılmasınlar diye burada duruyorlar.
+
+* **Anahtar açıkken `POST /query` herkese 503 döner.** `OidcIdentityProvider.resolve()`
+  başlık kimliğini reddeder (principal imzalı ID token'dan ve sunucu oturumundan doğar),
+  `/query` ise hâlâ başlık yolunu kullanır. `/query`i oturuma bağlamak mevcut rotanın
+  sözleşmesini değiştirirdi ve bilinçli olarak YAPILMADI. Sınır bir testle sabitlendi
+  (`test_query_is_503_under_the_oidc_switch_known_limitation`) — sessizce değişemez.
+* **Oturum deposu varsayılanı bellek-içidir.** Tek süreçte doğru, yeniden başlatmada her
+  oturumu düşürür, birden çok kopyada çalışmaz. `SessionStore` Protocol'ü Redis/Postgres
+  için hazır ama **böyle bir depo bu pakette YOKTUR**.
+* **Refresh token YOK, back-channel logout YOK.** Oturum kendi TTL'iyle biter; IdP tarafında
+  yapılan bir çıkış buraya ULAŞMAZ. Token yenileme hiç uygulanmadı.
+* **Sertifika kimlik bilgisi (`private_key_jwt`) YOK.** `_exchange_code` yalnız `none`,
+  `client_secret_post` ve `client_secret_basic` bilir. Entra için bu bir kod değişikliğidir.
+* **Çok kiracılılık YOK.** `iss` sabit bir dizgiyle birebir karşılaştırılır ve
+  `MailboxGrant.principal_id` yalnız `sub`'dur. Entra'nın `common`/`organizations` yolu ve
+  zorunlu `tid` doğrulaması için ikisi de değişmek zorundadır (migration notunda §2/§7).
+* **MFA, Conditional Access, device compliance ÖLÇÜLMEDİ.**
+* **Canlı Entra ID denemesi YAPILMADI.** Migration notu belgelerin okunmasıdır; hiçbir
+  kiracıya bağlanılmadı.
+* **JWKS için periyodik arka plan yenilemesi YOK** — yalnız tembel yükleme +
+  bilinmeyen-`kid` yenilemesi. Doğruluk için yeterli, ilk isteğin gecikmesi için değil.
+* **Tatbikattaki Keycloak `start-dev` modundadır** ve düz HTTP konuşur; bu yüzden orada
+  çerez `Secure=0` ile koşar. Varsayılan `Secure=True`dur ve öyle kalır.
+
 ## Doğrulama
 
 ```powershell
-cd reference-implementations/portable-ai-core
+# Depo kökünden (bu dosyanın bulunduğu dizin).
 python -m pytest -q
-ruff check .
+python -m pip install -r requirements-auth.lock --require-hashes   # `auth` extra: identity testleri
+python -m pytest -q
+ruff check src/wozto_ai_reference tests
 ```
+
+⚠️ **Bu bloktaki iki şey ölçülerek düzeltildi (2026-09-06), sanılan hâliyle bırakılmadı:**
+
+* Eski ilk satır `cd reference-implementations/portable-ai-core` idi. **Böyle bir dizin
+  YOK** — bu depo 2026-08-19'da ayrı bir public repoya taşındı ve kök zaten paketin kendisi.
+  Komut olduğu gibi kopyalanınca ilk adımda ölüyordu.
+* Eski son satır `ruff check .` idi ve **exit 1 veriyor**: depoda `identity` işinden ÖNCE
+  de var olan **6 bulgu** duruyor (`comparison.py`de 2× `E741`, `test_comparison.py`de
+  2× `E501`, `test_e5_embedding.py` ve `test_hybrid_experiment_ingest.py`de `I001` —
+  ikisi `--fix` ile düzelir). Bunlar bu değişikliğin kapsamı dışındaki dosyalardadır ve
+  BİLİNÇLİ olarak düzeltilmedi. ⚠️ **Yukarıdaki kapsamlı komut da aynı 6 bulguyla exit 1 verir**
+  (altı dosyanın hepsi `src/wozto_ai_reference` ve `tests` içinde; 2026-09-06'da ölçüldü) — yani
+  bu satır bugün yeşil bir kapı DEĞİLDİR. Yeni kod (`identity/`, `llm_gateway/`, testleri) ruff
+  temizdir; "ruff yeşil" ancak o 6 bulgu kapatılınca söylenir (`docs/tech-debt.md`).
+* ⛔ **CI ruff KOŞMUYOR.** `.github/workflows/ci.yml` yalnız pytest ve pgvector kapılarını
+  koşturur; lint tamamen yerel disiplindir. "CI yeşil" bu depoda "lint temiz" DEMEK DEĞİLDİR.
+
+`identity` testleri `auth` extra'sı olmadan **toplanamaz** (import hatası, sessiz skip
+değil). Extra'sız koşuda bu beklenen davranıştır ve CI onu ayrı bir pozitif kontrolle
+ölçer.
 
 ## Sonraki checkpoint
 
