@@ -18,7 +18,7 @@ not prove is listed below, and every number in
               ┌─────────────┼──────────────┐
               │             │              │
           ┌───┴───┐    ┌────┴────┐   ┌─────┴──────┐
-          │  app  │    │   n8n   │───│ n8n-runner │ (external task runners, 5679)
+          │  app  │    │   n8n   │◄──│ n8n-runner │ (external task runners)
           └───┬───┘    └────┬────┘   └────────────┘
               │             │
           drill_app     drill_n8n      ← two databases, two roles, one server
@@ -28,32 +28,71 @@ not prove is listed below, and every number in
                  └────────┘
 ```
 
+Two runner port numbers are easy to conflate, so both are named: the runner **dials out**
+to the task broker at `n8n:5679` — measured, that port answers HTTP inside the `n8n`
+container, while `5678` is the n8n API — and the runner container itself exposes
+`5680/tcp` (`docker compose -p drill ps` shows `drill-n8n-runner-1 … 5680/tcp`). Neither
+is published to the host; both are container-network only.
+
 ## Run it
 
 ```bash
 cd deploy/compose-drill
+chmod +x scripts/*.sh           # the tree ships them mode 644; a fresh clone needs this
 
 scripts/gen_secrets.sh          # 4 secret files, once (no .env - see the script)
 scripts/up.sh                   # build + up, times it to ALL-healthy
 scripts/seed.sh                 # 1000 rows + marker, workflow, credential
+                                #   (restarts n8n mid-run to make the webhook answer 200)
 scripts/verify_tls.sh           # internal-CA TLS, with a negative control
+                                #   (writes ca.crt into this directory)
 scripts/backup.sh               # dumps + workflow export + key + manifest.json
 scripts/restore_drill.sh        # fresh volume, restore, verify, tear down
 
-# optional `idp` profile (Keycloak 26.7.3 + OIDC-enabled app; see S2-DRILL-2026-09-06.md):
+# Optional `idp` profile (Keycloak 26.7.3 + OIDC-enabled app; see S2-DRILL-2026-09-06.md).
+# It is an OVERRIDE, not a second stack: it adds Keycloak and replaces `app` with an
+# OIDC-enabled build against the SAME Postgres server, in a third database. It can be
+# added to a base stack that is ALREADY RUNNING - idp_up.sh creates Keycloak's role and
+# database idempotently first, then reads them back (see the initdb note below).
 scripts/idp_up.sh               # 3 more secret files, /etc/hosts entries, --profile idp up
 scripts/idp_check.sh            # end-to-end logins: alice / bob / mia, cross-user 403s, ledger rows
 
-docker compose -p drill down -v                 # clean up (base stack)
-docker compose -p drill --profile idp down -v   # clean up when the idp profile was used
+# ---- clean up ----
+docker compose -p drill down -v                 # base stack, volumes included
+docker compose -p drill --profile idp down -v   # when the idp profile was used
+rm -f secrets/*.txt ca.crt                      # the *.example files stay
+
+# idp_up.sh appended two loopback entries to /etc/hosts and `down -v` does NOT remove
+# them. Rewrite the file rather than editing in place: where /etc/hosts is a bind mount
+# (any container, a Codespace included) `sed -i` fails with "Device or resource busy",
+# because it renames a temporary file over the target.
+grep -v 'drill\.internal' /etc/hosts | sudo tee /etc/hosts.new > /dev/null
+sudo cp /etc/hosts.new /etc/hosts && sudo rm -f /etc/hosts.new
+
+# Optional: the two locally built images survive the teardown (measured: 336 MB and
+# 361 MB reported by `docker images`, sharing most of their layers).
+docker rmi drill-app:local drill-app-auth:local
 ```
 
 Requirements: Docker with Compose v2, `openssl`, `curl`, ~1 GB of RAM for the stack and
 about 1 GB of disk for images. Host ports used by the **base** stack: `127.0.0.1:18080` and
-`127.0.0.1:18443` only, and Postgres is not reachable from the host at all. The optional
-**`idp` profile publishes two more** — `127.0.0.1:8080` (Keycloak) and `127.0.0.1:8000`
-(the API directly, bypassing Caddy) — because an OIDC issuer must resolve to the *same* URL
-string from the host and from inside the network. See the header of `compose.idp.yaml`.
+`127.0.0.1:18443` only, and Postgres is not reachable from the host at all. That claim is
+checkable, so check it rather than trusting it:
+
+```bash
+docker compose -p drill ps --format 'table {{.Name}}\t{{.Ports}}'
+ss -ltnp | grep -E '18080|18443|5432'
+```
+
+Measured 2026-09-07: the only `127.0.0.1:` entries in that table belong to `drill-caddy-1`
+(`127.0.0.1:18080->80/tcp`, `127.0.0.1:18443->443/tcp`); `postgres` shows a bare
+`5432/tcp`, and `ss` lists 18080 and 18443 with **no line for 5432** — an exposed port is
+not a published one.
+
+The optional **`idp` profile publishes two more** — `127.0.0.1:8080` (Keycloak) and
+`127.0.0.1:8000` (the API directly, bypassing Caddy) — because an OIDC issuer must resolve
+to the *same* URL string from the host and from inside the network. See the header of
+`compose.idp.yaml`.
 
 ## What each piece is for
 
@@ -63,9 +102,51 @@ string from the host and from inside the network. See the header of `compose.idp
 | `Dockerfile.app` | Builds the repository API from `requirements.lock` with `--require-hashes`, runs as uid 10001, and never sees a database password in its environment. |
 | `app-entrypoint.sh` | Turns a mounted secret into a 0600 libpq passfile on tmpfs, because `PgVectorStore` refuses a password embedded in the connection URL. |
 | `Caddyfile` | `tls internal` for two hostnames; the drill trusts Caddy's own CA explicitly and proves the negative case too. |
-| `initdb/` | Creates n8n's own role and database on first boot and revokes the default `PUBLIC` connect grant, so neither application can read the other's database. |
+| `initdb/` | Creates n8n's (and, for the `idp` profile, Keycloak's) own role and database on first boot and revokes the default `PUBLIC` connect grant, so neither application can read the other's database. ⚠️ Runs **only on an empty `PGDATA`** — see the note below. |
 | `scripts/backup.sh` | Dumps, workflow export, and the encryption key **to a separate directory**, with a `manifest.json` carrying sha256 + byte size of every artifact. |
 | `scripts/restore_drill.sh` | A second Compose project on an empty volume: restore, then check row count, content digest, table ownership, workflow presence, readiness, and credential decryption. |
+
+⚠️ **Why `idp_up.sh` creates the Keycloak role itself.** `initdb/*` runs once, against an
+empty `PGDATA`, so the order in "Run it" — base stack first, `idp` profile afterwards —
+would otherwise leave the volume without the `drill_keycloak` role, the extended
+healthcheck in `compose.idp.yaml` would (correctly) refuse to go green, and the whole
+chain would die with `dependency failed to start: container drill-postgres-1 is unhealthy`.
+
+`scripts/idp_up.sh` therefore creates the role and database idempotently before starting the
+profile, and reads them back from the server. The SQL is not duplicated: the script parses
+the statements out of `initdb/20-drill-keycloak-db.sh` and refuses to run if they no longer
+match the idempotent form it knows how to reproduce.
+
+**A second, worse defect sat underneath that one; it is fixed, and the history is kept
+because the symptom was invisible.** `initdb/20-drill-keycloak-db.sh` is mounted into the
+**base** stack too, where the `keycloak_db_password` secret is not — and until 2026-09-07 it
+aborted there:
+
+```
+cat: /run/secrets/keycloak_db_password: No such file or directory
+PostgreSQL Database directory appears to contain a database; Skipping initialization
+```
+
+Initialisation aborted, the container died, `restart: unless-stopped` brought it back, the
+second boot skipped init entirely — and the stack still reported **all six services
+healthy**, because the base healthcheck only asserts the `drill_n8n` role that the earlier
+`10-` script had already created. It was also a race: of four fresh bring-ups three
+self-healed and one failed outright with `dependency failed to start`. The init script now
+**skips and says so** — `initdb: keycloak secret not mounted; idp role/db will be ensured by
+scripts/idp_up.sh` — instead of aborting. Verified over three consecutive fresh bring-ups:
+`RestartCount=0` every time, exactly one PID-1 "ready to accept connections" line every
+time, `drill_n8n` present, all healthy in 40.1 / 39.9 / 35.1 s.
+
+⚠️ **`idp_check.sh` is the only thing that proves the profile actually works.** Adding the
+profile replaces the `postgres` container, and a Keycloak that was already running then
+holds dead connection handles (`PSQLException: This connection has been closed`) — every
+container reports healthy, `idp_up.sh` exits 0, and every login still fails. Keycloak's
+readiness probe answers on its management port and never touches the database, so it cannot
+see this. `idp_up.sh` now detects the replacement and restarts Keycloak itself (measured:
+18.0 s, after which `idp_check.sh` passes with no manual step); if you ever reach that state
+by another route, `docker compose -p drill -f compose.yaml -f compose.idp.yaml --profile idp
+restart keycloak` is the manual equivalent. Measured 2026-09-07; see
+`S2-DRILL-2026-09-06.md` §11(f) and TD-077.
 
 ## What this drill proves
 

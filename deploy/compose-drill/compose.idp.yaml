@@ -62,7 +62,16 @@ services:
     # password (crash loop) nor the database password (SCRAM failure). The shim maps
     # `KC_<OPTION>_FILE` -> `KC_<OPTION>`; its header carries both exact errors and the
     # cost of the workaround.
-    entrypoint: ["/drill-idp/keycloak-entrypoint.sh"]
+    # ⚠️ Invoked THROUGH bash rather than executed directly, and that is a measurement,
+    # not a style choice (2026-09-07, fresh clone in a Codespace): the shim is committed
+    # with mode 644, so a bind-mounted copy is not executable and the container never
+    # starts -
+    #   OCI runtime create failed: unable to start container process: exec:
+    #   "/drill-idp/keycloak-entrypoint.sh": permission denied
+    # The mode of a bind-mounted file comes from the host checkout, so it cannot be relied
+    # on; naming the interpreter removes the dependency entirely. (`/bin/bash` is present
+    # in keycloak:26.7.3 - verified, 5.1.8 - and the shim's shebang is `#!/bin/bash`.)
+    entrypoint: ["/bin/bash", "/drill-idp/keycloak-entrypoint.sh"]
     command:
       - start-dev
       - --import-realm

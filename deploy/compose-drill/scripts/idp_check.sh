@@ -24,6 +24,19 @@ case "$USER_NAME" in
   *) echo "unknown drill user: $USER_NAME" >&2; exit 2 ;;
 esac
 
+# ⚠️ HARD DEPENDENCY on scripts/idp_up.sh having actually reached ALL-HEALTHY. In the
+# 2026-09-06 handover drill idp_up.sh failed, this script was run anyway, printed one
+# line and died with curl's exit 7 - a bare connection error that says nothing about the
+# cause. Probe both ends first and name the one that is missing.
+for probe in "$APP/health" "$IDP/realms/drill/.well-known/openid-configuration"; do
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$probe" || true)"
+  [ "$code" = "200" ] && continue
+  echo "PRECHECK FAIL: $probe -> ${code:-unreachable}" >&2
+  echo "  the idp profile is not serving. Run scripts/idp_up.sh and read ITS output;" >&2
+  echo "  this script cannot make a stack that never came up answer." >&2
+  exit 3
+done
+
 fails=0
 check() { # check <label> <actual> <expected>
   if [ "$2" = "$3" ]; then
