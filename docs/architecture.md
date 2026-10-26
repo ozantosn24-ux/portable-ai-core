@@ -128,8 +128,8 @@ Devre kesici yalnız **sağlayıcı** arızasını sayar: `BadRequestError` /
   `quality_evaluation adversarial` (yedi kategori, kategori başına false-allow sayısı, kapı
   `tests/test_quality_evaluation.py` içindeki mutasyonlarla sınanır). Açık kalan: gerçek
   kullanıcı/saldırgan trafiğiyle türetilmiş vakalar; vakaların 4'ü servis korumasını değil
-  sağlayıcı/harness'ı ölçer (README *Adversarial kapı*). TD-035 SHA ile kapanana kadar listede
-  "closing" olarak durur,
+  sağlayıcı/harness'ı ölçer (README *Adversarial kapı*). TD-035 `0623615` ile
+  kapandı,
 - OpenTelemetry trace, latency, token ve cost-per-task ölçümü,
 - queue/DLQ; `llm_gateway` `AllProvidersUnavailable(queue_hint=True)` ile kuyruğa alınması
   gerektiğini SÖYLER ama kuyruğun kendisi bu pakette YOKTUR ve gateway hiçbir canlı
