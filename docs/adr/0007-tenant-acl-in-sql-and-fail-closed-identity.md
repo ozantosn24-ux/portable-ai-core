@@ -176,3 +176,13 @@ decision record anywhere; it is reconstructed from the trust-boundary list in
   in `docs/architecture.md` stands.
 * ADR 0006 — the drill's app healthcheck decision, which is a direct consequence of `/ready`
   failing closed.
+
+## Addendum 2026-10-27
+
+The body above is unchanged. One *Consequences* item has moved: "Prompt-injection and
+cross-tenant negative tests are listed as open" now has a synthetic suite behind it —
+`sample-corpus/adversarial-eval.json`, run by `python -m wozto_ai_reference.quality_evaluation
+adversarial`, with the protections it relies on removed one at a time in
+`tests/test_quality_evaluation.py`. It exercises this core's own guards on synthetic cases; it
+is not a catalogue of real attacks, and 4 of its 21 cases measure the scripted provider rather
+than a service guard (README *Adversarial kapı*). Tracked as TD-035 in `docs/tech-debt.md`.

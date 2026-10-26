@@ -760,6 +760,54 @@ def test_structured_claim_contract_rejects_duplicate_claim_ids() -> None:
         StructuredAnswer(answer=f"{claim.text} {claim.text}", claims=(claim, claim))
 
 
+def _abstention_view(service: QueryService, telemetry: MemoryTelemetry, *, principal: Principal, query: str):
+    """Everything a caller (or a side channel) can observe, minus the random trace id."""
+    before = len(telemetry.events)
+    result = _run_query(service, principal=principal, query=query)
+    events = [(event.name, event.attributes) for event in telemetry.events[before:]]
+    return result.model_dump(exclude={"trace_id"}), events
+
+
+def test_unauthorized_but_existing_source_is_indistinguishable_from_no_source() -> None:
+    # Side-channel contract (README "Yan kanal tehdit modeli"): a document that exists but
+    # is closed to the caller must produce the SAME observable abstention as no document.
+    restricted = _document(
+        tenant_id="tenant-a",
+        document_id="finance-policy",
+        content="Finance approval policy.",
+        acl_roles=frozenset({"finance"}),
+    )
+    employee = Principal(tenant_id="tenant-a", user_id="employee-1", roles=frozenset({"employee"}))
+
+    class LeakySearch:
+        async def search(self, *, principal: Principal, query: str, limit: int) -> Sequence[RetrievalHit]:
+            return [RetrievalHit(document=restricted, score=1.0)]
+
+    def make(search) -> tuple[QueryService, MemoryTelemetry]:
+        telemetry = MemoryTelemetry()
+        return QueryService(search=search, model=DeterministicGroundedModel(), telemetry=telemetry), telemetry
+
+    unauthorized_service, unauthorized_telemetry = make(InMemorySearchProvider([restricted]))
+    leaky_service, leaky_telemetry = make(LeakySearch())
+    no_source_service, no_source_telemetry = make(InMemorySearchProvider([]))
+
+    unauthorized, unauthorized_events = _abstention_view(
+        unauthorized_service, unauthorized_telemetry, principal=employee, query="finance policy"
+    )
+    leaky, leaky_events = _abstention_view(leaky_service, leaky_telemetry, principal=employee, query="finance policy")
+    no_source, no_source_events = _abstention_view(
+        no_source_service, no_source_telemetry, principal=employee, query="finance policy"
+    )
+
+    assert no_source["abstained"] is True
+    assert no_source["citations"] == []
+    assert unauthorized == no_source
+    assert leaky == no_source
+    # Telemetry is internal, but it must not tell the two apart either.
+    assert unauthorized_events == no_source_events
+    assert leaky_events == no_source_events
+
+
 @pytest.mark.parametrize("minimum_score", [-0.1, float("nan"), float("inf")])
 def test_score_gate_rejects_invalid_thresholds(minimum_score: float) -> None:
     with pytest.raises(ValueError, match="minimum_score"):

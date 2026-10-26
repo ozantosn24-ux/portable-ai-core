@@ -11,12 +11,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .adapters import is_authorized
-from .domain import Principal
+from .adapters import DeterministicGroundedModel, MemoryTelemetry, is_authorized
+from .domain import Principal, QueryResult
 from .embedding import HashEmbeddingProvider, InMemoryHybridSearchProvider
 from .ingest import build_plan
 from .ports import SearchProvider
-from .service import eligible_hits
+from .service import QueryService, eligible_hits
 
 
 class EvalCase(BaseModel):
@@ -38,9 +38,17 @@ class EvalCase(BaseModel):
     # ⚠️ Literal: serbest metin olsaydi "paraphrse" yazim hatasi SESSIZCE dorduncu bir
     # katman yaratir ve tutarlilik kontrolunu seyreltirdi (Fable bulgusu 2026-08-17).
     layer: Literal["overlap", "paraphrase", "morphology"] | None = None
+    # NEDEN reddedilmeli: "unauthorized" = kaynak var ama bu principal'a kapali;
+    # "no_source" = korpusta kaynak yok. Servis ikisine BIREBIR AYNI govdeyi dondurmeli
+    # (yan kanal: ayrisirlarsa yanit "bu belge var" bilgisini sizdirir) —
+    # tests/test_service.py bunu sabitler. Etiket sonucu degistirmez, vakanin NIYETINI
+    # belgeler; None = etiketsiz (eski gold set'ler bozulmasin).
+    expected_abstain_reason: Literal["unauthorized", "no_source"] | None = None
 
     @model_validator(mode="after")
     def validate_expectation(self) -> EvalCase:
+        if self.expected_abstain_reason is not None and not self.expected_abstain:
+            raise ValueError("expected_abstain_reason requires expected_abstain")
         target_groups = int(bool(self.relevant_document_ids)) + int(
             bool(self.relevant_source_document_ids)
         )
@@ -239,6 +247,66 @@ async def evaluate(
     )
 
 
+class CitationReport(BaseModel):
+    """`citation_correct`: did the answer cite the document the gold set says it should?"""
+
+    cases: int
+    citation_correct: int
+    citation_correct_rate: float = Field(ge=0.0, le=1.0)
+    incorrect_case_ids: list[str]
+    # Bilgi amacli, kapiya GIRMEZ: atif verilen ama gold'da olmayan belge sayisi.
+    # Servis yetkili tum isabetleri atiflar; zayif isabetler gurultu olarak buraya duser.
+    irrelevant_citations: int = Field(ge=0)
+
+
+def _cited_ids(case: EvalCase, result: QueryResult) -> set[str]:
+    cited = {citation.document_id for citation in result.citations}
+    if case.relevant_source_document_ids:
+        return {document_id.split("::", 1)[0] for document_id in cited}
+    return cited
+
+
+def citation_correct(case: EvalCase, result: QueryResult) -> bool:
+    """Retrieval vakasi: yanit verildi VE atiflardan en az biri gold hedefte.
+
+    Abstain vakasi: servis reddetti VE hicbir atif sizdirmadi. Alan eklemez; mevcut
+    `QueryResult.citations[].document_id` degerini gold ile karsilastirir.
+    """
+    cited = {citation.document_id for citation in result.citations}
+    if case.expected_abstain:
+        return result.abstained and not cited
+    if result.abstained:
+        return False
+    targets = case.relevant_source_document_ids or case.relevant_document_ids
+    return bool(targets.intersection(_cited_ids(case, result)))
+
+
+async def evaluate_citations(
+    *,
+    service: QueryService,
+    cases: tuple[EvalCase, ...],
+    top_k: int = 5,
+) -> CitationReport:
+    """Her vakayi tam `QueryService` uzerinden kosar (arama + yetki + uretim + atif)."""
+    if not cases:
+        raise ValueError("citation evaluation requires at least one case")
+    incorrect: list[str] = []
+    irrelevant = 0
+    for case in cases:
+        result = await service.query(principal=case.principal, query=case.query, limit=top_k)
+        if not citation_correct(case, result):
+            incorrect.append(case.case_id)
+        targets = case.relevant_source_document_ids or case.relevant_document_ids
+        irrelevant += len(_cited_ids(case, result) - targets)
+    return CitationReport(
+        cases=len(cases),
+        citation_correct=len(cases) - len(incorrect),
+        citation_correct_rate=(len(cases) - len(incorrect)) / len(cases),
+        incorrect_case_ids=incorrect,
+        irrelevant_citations=irrelevant,
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the offline retrieval quality gate")
     parser.add_argument("--source-root", required=True, type=Path)
@@ -249,6 +317,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--minimum-mrr", type=float, default=0.8)
     parser.add_argument("--minimum-score", type=float, default=0.0)
     parser.add_argument("--minimum-abstain-accuracy", type=float, default=1.0)
+    parser.add_argument(
+        "--citations",
+        action="store_true",
+        help="also run every case through QueryService and report citation_correct",
+    )
+    parser.add_argument("--minimum-citation-correct", type=float, default=1.0)
     return parser
 
 
@@ -270,12 +344,39 @@ async def _run(args: argparse.Namespace) -> int:
         minimum_mrr=args.minimum_mrr,
         minimum_abstain_accuracy=args.minimum_abstain_accuracy,
     )
-    print(json.dumps({"passed": passed, **report.model_dump()}, ensure_ascii=False, sort_keys=True))
+    payload: dict[str, object] = report.model_dump()
+    if args.citations:
+        citation_report = await evaluate_citations(
+            service=QueryService(
+                search=search,
+                model=DeterministicGroundedModel(),
+                telemetry=MemoryTelemetry(),
+                minimum_score=args.minimum_score,
+            ),
+            cases=cases,
+            top_k=args.top_k,
+        )
+        payload["citations"] = citation_report.model_dump()
+        passed = passed and citation_report.citation_correct_rate >= args.minimum_citation_correct
+    print(json.dumps({"passed": passed, **payload}, ensure_ascii=False, sort_keys=True))
     return 0 if passed else 2
 
 
+# QueryService.query accepts limit 1..20; --top-k itself allows up to 100 for the
+# search-only gate, so the combination has to be refused up front, not as a traceback.
+_SERVICE_MAX_LIMIT = 20
+
+
+def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.citations and args.top_k > _SERVICE_MAX_LIMIT:
+        parser.error(f"--citations runs QueryService, which accepts --top-k up to {_SERVICE_MAX_LIMIT}")
+
+
 def main() -> int:
-    return asyncio.run(_run(_parser().parse_args()))
+    parser = _parser()
+    args = parser.parse_args()
+    _validate_args(parser, args)
+    return asyncio.run(_run(args))
 
 
 if __name__ == "__main__":

@@ -124,7 +124,12 @@ Devre kesici yalnız **sağlayıcı** arızasını sayar: `BadRequestError` /
   revision'ları ve false-accept=0 doğrulanmış eşikler,
 - doğal dilden zaman/otorite koşulu çıkaran bileşen için insan-etiketli calibration;
   bu bileşen hard policy'nin veya kaynak metadata doğrulamasının yerine geçmez,
-- prompt injection ve cross-tenant negatif testleri,
+- ⭐ **Bu kalem artık sentetik kapsamda VAR (2026-10-27):** `sample-corpus/adversarial-eval.json` +
+  `quality_evaluation adversarial` (yedi kategori, kategori başına false-allow sayısı, kapı
+  `tests/test_quality_evaluation.py` içindeki mutasyonlarla sınanır). Açık kalan: gerçek
+  kullanıcı/saldırgan trafiğiyle türetilmiş vakalar; vakaların 4'ü servis korumasını değil
+  sağlayıcı/harness'ı ölçer (README *Adversarial kapı*). TD-035 SHA ile kapanana kadar listede
+  "closing" olarak durur,
 - OpenTelemetry trace, latency, token ve cost-per-task ölçümü,
 - queue/DLQ; `llm_gateway` `AllProvidersUnavailable(queue_hint=True)` ile kuyruğa alınması
   gerektiğini SÖYLER ama kuyruğun kendisi bu pakette YOKTUR ve gateway hiçbir canlı

@@ -153,11 +153,73 @@ python -m wozto_ai_reference.quality_evaluation --minimum-accuracy 1 semantic-st
   --entailment-positive-label-index <index> `
   --minimum-relevance <reviewed-threshold> `
   --minimum-entailment <reviewed-threshold>
+
+# Adversarial küme: tam QueryService üzerinden, kategori başına false-allow sayısı.
+python -m wozto_ai_reference.quality_evaluation adversarial `
+  --cases sample-corpus/adversarial-eval.json
 ```
 
 Tüm kapılar false allow/accept, false refusal/reject, constraint/support mismatch ve
 duplicate vaka kimliklerini ayrıca raporlar. Örnekler sentetik mekanizma testidir; insan
 etiketli domain calibration veya production kalite iddiası değildir.
+
+### Adversarial kapı (`adversarial`)
+
+`sample-corpus/adversarial-eval.json` yedi kategoriyi ayrı vakalar olarak koşar: belgeye
+gömülü talimat · başka tenant/ACL'e ait belgeyi dönen arama · hiç retrieve edilmemiş ya da
+içeriği tutmayan citation · arama zaman aşımı / boş sonuç / eksik geçerlilik metadatası ·
+tekrarlayan arama isteği · kanıtsız ya da çelişkili kapsamlı soru · yetki dışı aksiyon
+isteği. Beklenti hep fail-closed'dur ve vaka başına AÇIKTIR: `abstain` (varsayılan; servis
+reddeder), `reject` (yalnız servisin sönümleyemediği hata, örn. arama zaman aşımı; beklenen
+istisna türü `expected_error` ile yazılır) ya da `answer` (kontrol vakası). Rapor
+`false_allows_by_category` verir; **tek bir false-allow, kategori başına 2'den az vaka,
+kontrol vakasının reddedilmesi, beklenmeyen istisna (`unexpected_rejections`: abstain
+beklenirken ya da farklı türde istisna) / beklenmeyen abstain (`unexpected_abstentions`) ya
+da yinelenen vaka kimliği** exit 2 üretir. İstisnanın otomatik "fail-closed" sayılmaması
+bilinçlidir: harness hatası, vakanın servise hiç ulaşmamasını gizleyebilirdi.
+`--minimum-accuracy` bu komutta yok sayılır: tolerans yoktur.
+
+Sınırlar (ölçülen, abartılmayan): vakalar sentetiktir ve **bu çekirdeğin kendi
+korumalarını** (tenant/ACL son-kontrolü, extractive critic, `DenyPhraseQueryPolicy`,
+kapsam çözücü, geçerlilik filtresi) sınar; "tekrarlayan arama" kategorisi çekirdekte ajan
+döngüsü olmadığı için yalnız *sorgu başına en fazla bir arama* özelliğini ölçer. Politika
+ifade listesine dayanır: listede olmayan bir aksiyon cümlesi bu kapıyla yakalanmaz. Critic
+extractive'dir: belgenin kendisini (içindeki talimat dahil) alıntılayan cevabı `supported`
+sayar — talimatın *uygulanmasını* yakalar, alıntılanmasını değil.
+
+Ölçülen kapsam: `tests/test_quality_evaluation.py` sekiz korumayı tek tek kaldırır (servis
+ACL son-kontrolü, extractive critic, yapılandırılmış critic, sorgu politikası, kaynak
+geçerlilik filtresi, skor kapısı, kapsam çözücü, "sorgu başına tek arama") ve her biri
+sahibi olduğu kategoriyi kırmızıya düşürür; yedi kategorinin hepsinin en az bir sahip
+mutantı vardır. "Her koruma kalkınca kapı kırmızı olur" sınıf iddiası YAPILMIYOR: yalnız bu
+sekiz mutant ölçüldü, başka koruma ya da başka gevşetme biçimi ölçülmedi. Vakalarda
+`measures` alanı var: `provider_or_harness` işaretli 4 vaka (`tenant-foreign-chunk-id-in-query`,
+`retrieval-search-timeout`, `retrieval-empty-result`, `unsupported-topic-not-in-corpus`)
+servisin hiçbir korumasını kaldırınca kızarmaz; scripted sağlayıcıyı/harness'ı ölçer ve
+koruma kanıtı sayılmaz (sweep testi etiketi doğrular, servis vakalarının hepsinin bir mutantla
+kızardığını da). Kapı kategori başına en az 2 vaka ister (`MINIMUM_CASES_PER_CATEGORY`);
+test de aynı alt sınırı kullanır.
+
+### Yan kanal tehdit modeli
+
+Yetkisiz bir kullanıcı için "belge var ama sana kapalı" ile "böyle bir belge yok" ayırt
+edilemezse yanıt, erişilemeyen bir belgenin varlığını sızdırır. Hedef: bu iki durumda
+yanıtın gözlenebilir her parçası aynı olsun.
+
+* **Sabitlenen (test var):** `QueryResult` gövdesi (`answer`, `citations=[]`, `abstained`) ve
+  servisin yazdığı telemetri olayları iki durumda birebir eşittir — arama adaptörü yetkisiz
+  belgeyi hiç döndürmese de, sızdırsa da (`tests/test_service.py`,
+  `test_unauthorized_but_existing_source_is_indistinguishable_from_no_source`).
+  Citation, score ve kaynak başlığı yalnız yetkili isabetlerde doldurulur.
+* **Ölçülmedi:** yanıt süresi (yetkisiz belge için ek filtre/sorgu işi zamanlamayı
+  kaydırabilir), HTTP/MCP katmanındaki hata kodu ve gövde farkı, arama skorunun
+  yetkisiz belgeyle kayması. Bu yüzden "yan kanal yok" iddiası **yapılmıyor**; yalnız gövde
+  eşitliği kanıtlı.
+* Gold set vakalarına `expected_abstain_reason` (`unauthorized` | `no_source`) eklenebilir.
+  Alan yalnız `expected_abstain` ile birlikte geçerlidir ve sonucu değiştirmez; vakanın
+  niyetini belgeler. Tohum `gold-set.json`a bu etiketli vakalar eklenmedi: hibrit hash
+  gömme zayıf isabetleri her zaman döndürdüğü için bu vakalar kalibre edilmiş bir
+  `--minimum-score` olmadan "beklenmeyen cevap" verir.
 
 ## Güvenli ingest ve retrieval ölçümü
 
@@ -186,6 +248,22 @@ kaynak-belge kimliklerini (`relevant_source_document_ids`) kullanır. Korpusta c
 olmaması gereken ve yetki nedeniyle reddedilmesi gereken sorular
 `"expected_abstain": true` ile açıkça etiketlenir; rapor bunları retrieval recall'a
 karıştırmadan `abstain_accuracy` ve `unexpected_answers` olarak ölçer.
+
+`--citations` her vakayı ek olarak tam `QueryService` üzerinden koşar ve `citation_correct`
+metriğini raporlar: yanıt verilen vakada `QueryResult.citations[].document_id` değerlerinden
+en az biri gold hedefte (`relevant_document_ids` ya da kaynak-belge kimliği) olmalı; abstain
+vakasında servis reddetmeli ve hiç citation dönmemeli. Gold'da olmayan ek citation sayısı
+`irrelevant_citations` olarak ayrıca yazılır ama kapıya girmez (servis yetkili tüm isabetleri
+atıflar; tohum korpusta zayıf isabetler gürültü olarak düşer). Alan eklenmez: metrik mevcut
+`Citation` alanlarını okur. `--minimum-citation-correct` varsayılanı `1.0`dır.
+
+⚠️ CLI evidence critic'siz koşar: `citation_correct` o durumda yalnız *yetkili ve eşiği
+geçen isabet kümesini* ölçer. Atıflar o kümeden geldiği ve model atıf seçmediği için model
+çıktısından bağımsızdır ve pratikte "gold belge top-k'da" (recall@k > 0) ile aynı şeyi
+söyler; modelin/critic'in doğru kaynağa atıf verdiğini kanıtlamaz. Yalnız üretim hattı
+(critic + gerçek model) bağlandığında üretim atfını ölçer. `--citations`, `--top-k` için
+servis sınırı olan 20'yi aşamaz (`--top-k 21` parser hatası verir); critic'siz arama kapısı
+kendi 1–100 aralığını korur.
 
 `--minimum-score` serving katmanındaki aynı score kapısını yeniden üretir;
 `--minimum-abstain-accuracy` varsayılan olarak `1.0`dır. Arama skorları sağlayıcıya,
