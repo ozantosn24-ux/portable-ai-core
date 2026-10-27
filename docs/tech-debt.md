@@ -123,7 +123,7 @@ TD-018.
 
 | ID | Module | Was | Closed by | Evidence |
 |---|---|---|---|---|
-| TD-035 | identity | Prompt-injection and cross-tenant negative tests were open — no adversarial suite | [`0623615`](https://github.com/ozantosn24-ux/portable-ai-core/commit/0623615d9c5685e856d97f52f8f0e432d6e454a5) | `quality_evaluation adversarial` exits 0, `false_allows: 0`; `tests/test_quality_evaluation.py` removes 8 protections one at a time and each turns its category red. Scope: synthetic cases against this core's own protections; 4 of 21 cases measure the scripted provider/harness (README *Adversarial kapı*) |
+| TD-035 | identity | Prompt-injection and cross-tenant negative tests were open — no adversarial suite | [`95b2b54`](https://github.com/ozantosn24-ux/portable-ai-core/commit/95b2b5462de86e6b506dbc7ed3f2969301c85847) | `quality_evaluation adversarial` exits 0, `false_allows: 0`; `tests/test_quality_evaluation.py` removes 8 protections one at a time and each turns its category red. Scope: synthetic cases against this core's own protections; 4 of 21 cases measure the scripted provider/harness (README *Adversarial kapı*) |
 
 ## Review cadence
 
